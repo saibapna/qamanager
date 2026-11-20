@@ -8,3 +8,6 @@ admin-ui/node_modules/
 admin-ui/dist/
 fixtures/*.pdf
 !fixtures/.gitkeep
+
+admin-ui/worker/generated-assets.mjs
+admin-ui/worker-dist/

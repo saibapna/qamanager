@@ -1,0 +1,32 @@
+name: Build Cloudflare Hono Worker
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin-ui/**'
+      - '.github/workflows/build-cloudflare-worker.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+        working-directory: admin-ui
+      - name: Compile React UI
+        run: npm run build
+        working-directory: admin-ui
+      - name: Bundle Hono and UI into one Cloudflare Worker
+        run: npm run build:worker
+        working-directory: admin-ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qamanager-hono-worker
+          path: admin-ui/worker-dist/qamanager-worker.mjs
+          if-no-files-found: error

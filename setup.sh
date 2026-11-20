@@ -10,6 +10,9 @@ done
 echo "▶ Buat direktori kosong..."
 mkdir -p output fixtures public data
 
+echo "▶ Build SQL templates seed..."
+node scripts/build-template-seed.mjs
+
 echo "▶ Generate hash user seed..."
 node scripts/generate-user-seed.mjs 2>/dev/null || echo "⚠️  Butuh npm install dulu untuk generate hash"
 
@@ -21,7 +24,7 @@ echo "✅ Setup selesai."
 echo ""
 echo "Langkah berikut:"
 echo "  npm install"
-echo "  node scripts/generate-user-seed.mjs"
+echo "  node scripts/generate-user-seed.mjs  # LOCAL DEMO ONLY"
 echo "  node scripts/build-openapi.js"
 echo "  docker compose up -d"
 echo ""

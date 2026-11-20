@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { PageHeader } from '@/components/PageHeader';
 import { FormField, inputCls } from '@/components/FormField';
 import { Badge } from '@/components/Badge';
+import {SecureImage} from '@/components/SecureImage';
 
 interface DP { page: number; ssim?: number; ok?: boolean; refUrl?: string; outUrl?: string; heatmapUrl?: string; }
 interface DR { allPass: boolean; pages: DP[]; }
@@ -38,6 +39,7 @@ export function DiffViewerPage() {
           </button>
         </div>
       </div>
+      {mut.isError && <p className="text-red-600 text-sm mb-4">{mut.error.message}</p>}
       {result && (
         <>
           <div className="flex gap-2 mb-4 flex-wrap">
@@ -51,9 +53,9 @@ export function DiffViewerPage() {
           {page?.ok !== undefined && <Badge variant={page.ok ? 'success' : 'danger'}>{page.ok ? 'IDENTIK' : 'BERBEDA'}</Badge>}
           {page && (
             <div className="grid grid-cols-3 gap-4 mt-4">
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Referensi</p><img src={page.refUrl} className="w-full border rounded" /></div>
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Output</p><img src={page.outUrl} className="w-full border rounded" /></div>
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Heatmap</p><img src={page.heatmapUrl} className="w-full border rounded" /></div>
+              <div><p className="text-xs font-medium text-slate-500 mb-1">Referensi</p><SecureImage src={page.refUrl} alt="PDF referensi" /></div>
+              <div><p className="text-xs font-medium text-slate-500 mb-1">Output</p><SecureImage src={page.outUrl} alt="PDF keluaran" /></div>
+              <div><p className="text-xs font-medium text-slate-500 mb-1">Heatmap</p><SecureImage src={page.heatmapUrl} alt="Heatmap perbedaan" /></div>
             </div>
           )}
         </>

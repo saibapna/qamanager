@@ -1,0 +1,535 @@
+{
+  "project": {
+    "instansi": "Badan Kepegawaian Daerah Provinsi Aceh",
+    "bidang": "Bidang Pengembangan Aplikasi",
+    "kode_form_1": "S-APP.2.OBJ.3",
+    "kode_form_2": "S-APP.2.OBJ.4",
+    "kode_form_3": "S-APP.2.OBJ.5",
+    "form_title": "Form Uji Aplikasi"
+  },
+  "skpd": {
+    "nama": "SIMPEG - Sistem Informasi Kepegawaian",
+    "kota": "Provinsi Aceh"
+  },
+  "aplikasi": {
+    "nama_singkat": "SIMPEG",
+    "nama_panjang": "Sistem Informasi Kepegawaian Provinsi Aceh",
+    "url": "https://simpeg.acehprov.go.id/"
+  },
+  "sesi": {
+    "hari": "Kamis",
+    "tanggal": "19 November 2026",
+    "pukul": "10:00",
+    "tempat": "Pengujian daring",
+    "jenis": "Uji Layak Operasi (ULO)"
+  },
+  "penguji": {
+    "nama": "Rina Marlina, S.Kom",
+    "jabatan": "Analis Sistem Informasi",
+    "email": "rina@acehprov.go.id",
+    "telp": "",
+    "nip": "19900101 202001 2 001"
+  },
+  "saksi": {
+    "nama": "",
+    "jabatan": "",
+    "email": "",
+    "telp": ""
+  },
+  "ringkasan": {
+    "total": 71,
+    "lulus": 64,
+    "gagal": 7,
+    "belum": 0,
+    "catatan": "Pengujian fungsional modul kepegawaian.",
+    "temuan": "Temuan: ekspor laporan mutasi belum lengkap."
+  },
+  "pages": [
+    {
+      "pageNumber": 2,
+      "isLastPage": false,
+      "rows": [
+        {
+          "isSection": true,
+          "text": "AUTENTIKASI & OTORISASI"
+        },
+        {
+          "no": "A1",
+          "kebutuhan": "Login: form tampil",
+          "hasil": "Form email/password tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "A2",
+          "kebutuhan": "Login: validasi kosong",
+          "hasil": "Pesan error muncul",
+          "status": "PASS"
+        },
+        {
+          "no": "A3",
+          "kebutuhan": "Login: kredensial valid",
+          "hasil": "Redirect dashboard",
+          "status": "PASS"
+        },
+        {
+          "no": "A4",
+          "kebutuhan": "Login: password salah",
+          "hasil": "Pesan kredensial salah",
+          "status": "PASS"
+        },
+        {
+          "no": "A5",
+          "kebutuhan": "Login: lockout 5x",
+          "hasil": "Akun terkunci 30 menit",
+          "status": "PASS"
+        },
+        {
+          "no": "A6",
+          "kebutuhan": "Logout",
+          "hasil": "Sesi berakhir, token invalid",
+          "status": "PASS"
+        },
+        {
+          "no": "A7",
+          "kebutuhan": "Session expiry",
+          "hasil": "Redirect otomatis",
+          "status": "PASS"
+        },
+        {
+          "no": "A8",
+          "kebutuhan": "Password reset email",
+          "hasil": "Email terkirim",
+          "status": "PASS"
+        },
+        {
+          "no": "A9",
+          "kebutuhan": "Password reset token",
+          "hasil": "Token expire 1 jam",
+          "status": "PASS"
+        },
+        {
+          "no": "A10",
+          "kebutuhan": "OTP 2FA login",
+          "hasil": "Kode OTP terkirim",
+          "status": "FAIL"
+        },
+        {
+          "no": "A11",
+          "kebutuhan": "OTP 2FA verify",
+          "hasil": "Kode valid lanjut",
+          "status": "FAIL"
+        },
+        {
+          "no": "A12",
+          "kebutuhan": "Role-based menu",
+          "hasil": "Menu sesuai role",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "DATA PEGAWAI"
+        },
+        {
+          "no": "B1",
+          "kebutuhan": "Daftar pegawai: akses",
+          "hasil": "Halaman terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "B2",
+          "kebutuhan": "Daftar pegawai: kolom",
+          "hasil": "NIP, Nama, Jabatan, Unit, Status",
+          "status": "PASS"
+        },
+        {
+          "no": "B3",
+          "kebutuhan": "Daftar pegawai: cari NIP",
+          "hasil": "Filter bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "B4",
+          "kebutuhan": "Daftar pegawai: cari nama",
+          "hasil": "Filter bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "B5",
+          "kebutuhan": "Daftar pegawai: pagination",
+          "hasil": "Navigasi bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "B6",
+          "kebutuhan": "Daftar pegawai: sort",
+          "hasil": "Asc/desc bekerja",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "pageNumber": 3,
+      "isLastPage": false,
+      "rows": [
+        {
+          "isSection": true,
+          "text": "DATA PEGAWAI"
+        },
+        {
+          "no": "B7",
+          "kebutuhan": "Detail pegawai: tab",
+          "hasil": "5 tab tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "B8",
+          "kebutuhan": "Detail pegawai: foto",
+          "hasil": "Foto tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "B9",
+          "kebutuhan": "Edit pegawai: form",
+          "hasil": "Pre-fill data",
+          "status": "PASS"
+        },
+        {
+          "no": "B10",
+          "kebutuhan": "Edit pegawai: validasi",
+          "hasil": "Field wajib divalidasi",
+          "status": "PASS"
+        },
+        {
+          "no": "B11",
+          "kebutuhan": "Edit pegawai: simpan",
+          "hasil": "Data persists",
+          "status": "PASS"
+        },
+        {
+          "no": "B12",
+          "kebutuhan": "Edit pegawai: audit",
+          "hasil": "Perubahan tercatat",
+          "status": "PASS"
+        },
+        {
+          "no": "B13",
+          "kebutuhan": "Tambah pegawai: form",
+          "hasil": "Form tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "B14",
+          "kebutuhan": "Tambah pegawai: simpan",
+          "hasil": "Record muncul",
+          "status": "PASS"
+        },
+        {
+          "no": "B15",
+          "kebutuhan": "Hapus pegawai: konfirmasi",
+          "hasil": "Dialog tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "B16",
+          "kebutuhan": "Hapus pegawai: soft delete",
+          "hasil": "Data non-aktif",
+          "status": "PASS"
+        },
+        {
+          "no": "B17",
+          "kebutuhan": "Import CSV pegawai",
+          "hasil": "File terproses",
+          "status": "FAIL"
+        },
+        {
+          "no": "B18",
+          "kebutuhan": "Export pegawai CSV",
+          "hasil": "File valid",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "MUTASI & PROMOSI"
+        },
+        {
+          "no": "C1",
+          "kebutuhan": "Mutasi: menu",
+          "hasil": "Terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "C2",
+          "kebutuhan": "Mutasi: daftar",
+          "hasil": "Tabel tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "C3",
+          "kebutuhan": "Mutasi: filter status",
+          "hasil": "Filter bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "C4",
+          "kebutuhan": "Mutasi: form baru",
+          "hasil": "Form terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "C5",
+          "kebutuhan": "Mutasi: validasi",
+          "hasil": "Field divalidasi",
+          "status": "PASS"
+        },
+        {
+          "no": "C6",
+          "kebutuhan": "Mutasi: simpan draft",
+          "hasil": "Draft tersimpan",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "pageNumber": 4,
+      "isLastPage": false,
+      "rows": [
+        {
+          "isSection": true,
+          "text": "MUTASI & PROMOSI"
+        },
+        {
+          "no": "C7",
+          "kebutuhan": "Mutasi: submit",
+          "hasil": "Status PENDING",
+          "status": "PASS"
+        },
+        {
+          "no": "C8",
+          "kebutuhan": "Mutasi: approve",
+          "hasil": "Status APPROVED",
+          "status": "PASS"
+        },
+        {
+          "no": "C9",
+          "kebutuhan": "Mutasi: reject",
+          "hasil": "Status REJECTED",
+          "status": "PASS"
+        },
+        {
+          "no": "C10",
+          "kebutuhan": "Promosi: menu",
+          "hasil": "Terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "C11",
+          "kebutuhan": "Promosi: kandidat",
+          "hasil": "Tabel tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "C12",
+          "kebutuhan": "Promosi: skor otomatis",
+          "hasil": "Skor terhitung",
+          "status": "PASS"
+        },
+        {
+          "no": "C13",
+          "kebutuhan": "Promosi: simpan hasil",
+          "hasil": "Tersimpan",
+          "status": "PASS"
+        },
+        {
+          "no": "C14",
+          "kebutuhan": "Promosi: ekspor PDF",
+          "hasil": "File terunduh",
+          "status": "PASS"
+        },
+        {
+          "no": "C15",
+          "kebutuhan": "Promosi: notifikasi email",
+          "hasil": "Email terkirim",
+          "status": "FAIL"
+        },
+        {
+          "isSection": true,
+          "text": "ABSENSI"
+        },
+        {
+          "no": "D1",
+          "kebutuhan": "Absensi: akses",
+          "hasil": "Modul terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "D2",
+          "kebutuhan": "Absensi: clock-in",
+          "hasil": "Waktu tercatat",
+          "status": "PASS"
+        },
+        {
+          "no": "D3",
+          "kebutuhan": "Absensi: clock-out",
+          "hasil": "Tombol bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "D4",
+          "kebutuhan": "Absensi: riwayat hari ini",
+          "hasil": "5 record",
+          "status": "PASS"
+        },
+        {
+          "no": "D5",
+          "kebutuhan": "Absensi: rekap bulanan",
+          "hasil": "Rekap tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "D6",
+          "kebutuhan": "Absensi: filter tanggal",
+          "hasil": "Filter bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "D7",
+          "kebutuhan": "Absensi: form izin",
+          "hasil": "Terbuka",
+          "status": "PASS"
+        },
+        {
+          "no": "D8",
+          "kebutuhan": "Absensi: upload surat",
+          "hasil": "File terunggah",
+          "status": "PASS"
+        },
+        {
+          "no": "D9",
+          "kebutuhan": "Absensi: approve izin",
+          "hasil": "Status APPROVED",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "pageNumber": 5,
+      "isLastPage": true,
+      "rows": [
+        {
+          "isSection": true,
+          "text": "ABSENSI"
+        },
+        {
+          "no": "D10",
+          "kebutuhan": "Absensi: GPS check-in",
+          "hasil": "Lokasi terverifikasi",
+          "status": "FAIL"
+        },
+        {
+          "no": "D11",
+          "kebutuhan": "Absensi: face recognition",
+          "hasil": "Wajah terverifikasi",
+          "status": "FAIL"
+        },
+        {
+          "no": "D12",
+          "kebutuhan": "Absensi: offline mode",
+          "hasil": "Sync saat online",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "LAPORAN KEPEGAWAIAN"
+        },
+        {
+          "no": "E1",
+          "kebutuhan": "Laporan: daftar",
+          "hasil": "8 jenis laporan",
+          "status": "PASS"
+        },
+        {
+          "no": "E2",
+          "kebutuhan": "Laporan: filter periode",
+          "hasil": "Filter bekerja",
+          "status": "PASS"
+        },
+        {
+          "no": "E3",
+          "kebutuhan": "Laporan: preview",
+          "hasil": "PDF inline",
+          "status": "PASS"
+        },
+        {
+          "no": "E4",
+          "kebutuhan": "Laporan: ekspor PDF",
+          "hasil": "File valid",
+          "status": "PASS"
+        },
+        {
+          "no": "E5",
+          "kebutuhan": "Laporan: ekspor Excel",
+          "hasil": "File valid",
+          "status": "PASS"
+        },
+        {
+          "no": "E6",
+          "kebutuhan": "Laporan: cetak",
+          "hasil": "Print dialog",
+          "status": "PASS"
+        },
+        {
+          "no": "E7",
+          "kebutuhan": "Laporan: email terjadwal",
+          "hasil": "Email terjadwal",
+          "status": "FAIL"
+        },
+        {
+          "no": "E8",
+          "kebutuhan": "Laporan: dashboard",
+          "hasil": "6 grafik tampil",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "UTILITY"
+        },
+        {
+          "no": "F1",
+          "kebutuhan": "User: daftar akun",
+          "hasil": "Tabel tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "F2",
+          "kebutuhan": "User: tambah",
+          "hasil": "Akun baru tersimpan",
+          "status": "PASS"
+        },
+        {
+          "no": "F3",
+          "kebutuhan": "User: edit",
+          "hasil": "Perubahan tersimpan",
+          "status": "PASS"
+        },
+        {
+          "no": "F4",
+          "kebutuhan": "User: reset password",
+          "hasil": "Reset berhasil",
+          "status": "PASS"
+        },
+        {
+          "no": "F5",
+          "kebutuhan": "Group: daftar",
+          "hasil": "Tabel tampil",
+          "status": "PASS"
+        },
+        {
+          "no": "F6",
+          "kebutuhan": "Group: assign permission",
+          "hasil": "Permission tersimpan",
+          "status": "PASS"
+        }
+      ]
+    }
+  ]
+}

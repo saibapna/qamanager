@@ -26,7 +26,7 @@ export function ProjectsPage() {
 
   const deleteMut = useMutation({
     mutationFn: projectsApi.remove,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); toast.push('success', 'Terhapus'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); toast.push('success', 'Project diarsipkan'); },
     onError: (e: Error) => toast.push('error', e.message)
   });
 

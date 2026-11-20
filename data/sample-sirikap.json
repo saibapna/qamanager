@@ -7,58 +7,552 @@
     "kode_form_3": "S-APP.2.OBJ.5",
     "form_title": "Form Uji Aplikasi"
   },
-  "skpd": { "nama": "Badan Perencanaan Pembangunan Daerah Kabupaten Pidie", "kota": "Kabupaten Pidie" },
+  "skpd": {
+    "nama": "Badan Perencanaan Pembangunan Daerah Kabupaten Pidie",
+    "kota": "Kabupaten Pidie"
+  },
   "aplikasi": {
     "nama_singkat": "SIRIKAP",
     "nama_panjang": "Sistem Inovasi dan Riset Kabupaten Pidie",
     "url": "https://sirikap.dev-government.my.id/"
   },
   "sesi": {
-    "hari": "Rabu", "tanggal": "18 November 2026", "pukul": "9:00",
+    "hari": "Rabu",
+    "tanggal": "18 November 2026",
+    "pukul": "9:00",
     "tempat": "Pengujian daring",
     "jenis": "Uji Layak Operasi (ULO) – uji fungsional non-destruktif"
   },
   "penguji": {
-    "nama": "Saipul Bahri, S.Kom", "jabatan": "Penata Layanan Operasional",
-    "email": "saipulbahri@acehprov.go.id", "telp": "0823 6220 6200",
+    "nama": "Saipul Bahri, S.Kom",
+    "jabatan": "Penata Layanan Operasional",
+    "email": "saipulbahri@acehprov.go.id",
+    "telp": "0823 6220 6200",
     "nip": "19880511 202521 1 045"
   },
-  "saksi": { "nama": "", "jabatan": "", "email": "", "telp": "" },
+  "saksi": {
+    "nama": "",
+    "jabatan": "",
+    "email": "",
+    "telp": ""
+  },
   "ringkasan": {
-    "total": 71, "lulus": 58, "gagal": 13, "belum": 0,
+    "total": 71,
+    "lulus": 58,
+    "gagal": 13,
+    "belum": 0,
     "catatan": "CREATE tidak persisten sehingga DELETE tidak dapat diuji.",
     "temuan": "Temuan: unduh panduan, chart/fullscreen, filter tahun Kecamatan, Group Otorisasi."
   },
   "pages": [
     {
-      "pageNumber": 2, "isLastPage": false,
+      "pageNumber": 2,
+      "isLastPage": false,
       "rows": [
-        { "isSection": true, "text": "SIRIKAP - UJI LAYAK OPERASI (NON-DESTRUKTIF)" },
-        { "isSection": true, "text": "AKSES & DASHBOARD" },
-        { "no": "D1", "kebutuhan": "Dashboard: kartu statistik", "hasil": "4 kartu tampil; angka belum direkonsiliasi." },
-        { "no": "D2", "kebutuhan": "Dashboard: grafik progres", "hasil": "Mode Doughnut/Pie dapat dipilih, canvas kosong." }
+        {
+          "isSection": true,
+          "text": "AKSES & DASHBOARD"
+        },
+        {
+          "no": "D1",
+          "kebutuhan": "Dashboard: kartu statistik inovasi, riset, digital, non-digital",
+          "hasil": "4 kartu tampil: Inovasi 112, Riset 8, Digital 30, Non Digital 82; angka belum direkonsiliasi.",
+          "status": "PASS"
+        },
+        {
+          "no": "D2",
+          "kebutuhan": "Dashboard: opsi grafik progres tahapan inovasi",
+          "hasil": "Mode Doughnut/Pie dapat dipilih, canvas kosong.",
+          "status": "FAIL"
+        },
+        {
+          "no": "D3",
+          "kebutuhan": "Dashboard: opsi grafik 7 besar inovasi",
+          "hasil": "Mode Line dapat dipilih, canvas kosong.",
+          "status": "FAIL"
+        },
+        {
+          "no": "D4",
+          "kebutuhan": "Dashboard: unduh panduan",
+          "hasil": "Tombol tidak memicu request; tidak ada handler.",
+          "status": "FAIL"
+        },
+        {
+          "no": "D5",
+          "kebutuhan": "Dashboard: panel customizer",
+          "hasil": "Panel tema terbuka; penyimpanan preferensi tidak diuji.",
+          "status": "PASS"
+        },
+        {
+          "no": "D6",
+          "kebutuhan": "Dashboard: tombol layar penuh",
+          "hasil": "Tidak menghasilkan document.fullscreenElement.",
+          "status": "FAIL"
+        },
+        {
+          "isSection": true,
+          "text": "PARAMETER - DAFTAR OPD"
+        },
+        {
+          "no": "P1",
+          "kebutuhan": "Daftar OPD: navigasi dan tampilan",
+          "hasil": "Halaman dan tabel terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "P2",
+          "kebutuhan": "Daftar OPD: struktur kolom",
+          "hasil": "Aksi, OPD, Nama OPD, Pengguna Anggaran.",
+          "status": "PASS"
+        },
+        {
+          "no": "P3",
+          "kebutuhan": "Daftar OPD: pencarian",
+          "hasil": "Filter 'DINAS' 82→20.",
+          "status": "PASS"
+        },
+        {
+          "no": "P4",
+          "kebutuhan": "Daftar OPD: pagination",
+          "hasil": "Bekerja 1-10 ke 11-20.",
+          "status": "PASS"
+        },
+        {
+          "no": "P5",
+          "kebutuhan": "Daftar OPD: buka form tambah",
+          "hasil": "Modal tampil lengkap.",
+          "status": "PASS"
+        },
+        {
+          "no": "P6",
+          "kebutuhan": "Daftar OPD: tahun anggaran",
+          "hasil": "Filter 2025 → no data, bekerja.",
+          "status": "PASS"
+        },
+        {
+          "no": "P7",
+          "kebutuhan": "Daftar OPD: tutup form",
+          "hasil": "Modal tertutup tanpa simpan.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "PARAMETER - KECAMATAN"
+        },
+        {
+          "no": "P8",
+          "kebutuhan": "Daftar Kecamatan: akses",
+          "hasil": "Halaman terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "P9",
+          "kebutuhan": "Daftar Kecamatan: kolom",
+          "hasil": "Aksi, Kode, Kecamatan.",
+          "status": "PASS"
+        },
+        {
+          "no": "P10",
+          "kebutuhan": "Daftar Kecamatan: pencarian",
+          "hasil": "Filter 'BATEE' 23→1.",
+          "status": "PASS"
+        },
+        {
+          "no": "P11",
+          "kebutuhan": "Daftar Kecamatan: form tambah",
+          "hasil": "Simpan balas sukses, recordsTotal tetap 23.",
+          "status": "FAIL"
+        },
+        {
+          "no": "P12",
+          "kebutuhan": "Daftar Kecamatan: form ubah",
+          "hasil": "Modal terbuka, ditutup tanpa perubahan.",
+          "status": "PASS"
+        }
       ]
     },
     {
-      "pageNumber": 3, "isLastPage": false,
+      "pageNumber": 3,
+      "isLastPage": false,
       "rows": [
-        { "isSection": true, "text": "PARAMETER - DAFTAR OPD" },
-        { "no": "P1", "kebutuhan": "Daftar OPD: navigasi", "hasil": "Halaman terbuka." }
+        {
+          "isSection": true,
+          "text": "PARAMETER - KECAMATAN"
+        },
+        {
+          "no": "P13",
+          "kebutuhan": "Daftar Kecamatan: tahun anggaran",
+          "hasil": "Ganti tahun tidak mengubah data.",
+          "status": "FAIL"
+        },
+        {
+          "isSection": true,
+          "text": "PARAMETER - GAMPONG"
+        },
+        {
+          "no": "P14",
+          "kebutuhan": "Daftar Gampong: akses",
+          "hasil": "Judul 'Daftar Kelurahan', bagian 'Daftar Gampong'.",
+          "status": "PASS"
+        },
+        {
+          "no": "P15",
+          "kebutuhan": "Daftar Gampong: kolom",
+          "hasil": "Aksi, Kode, Kelurahan.",
+          "status": "PASS"
+        },
+        {
+          "no": "P16",
+          "kebutuhan": "Daftar Gampong: form tambah",
+          "hasil": "Kecamatan, Kode Gampong, Nama Gampong.",
+          "status": "PASS"
+        },
+        {
+          "no": "P17",
+          "kebutuhan": "Daftar Gampong: filter Kecamatan",
+          "hasil": "Dropdown hanya 'Keseluruhan'.",
+          "status": "FAIL"
+        },
+        {
+          "no": "P18",
+          "kebutuhan": "Daftar Gampong: tutup form",
+          "hasil": "Modal tertutup.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "PARAMETER - URUSAN"
+        },
+        {
+          "no": "P19",
+          "kebutuhan": "Daftar Urusan: akses",
+          "hasil": "Halaman terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "P20",
+          "kebutuhan": "Daftar Urusan: kolom",
+          "hasil": "Aksi, Nama Urusan.",
+          "status": "PASS"
+        },
+        {
+          "no": "P21",
+          "kebutuhan": "Daftar Urusan: form tambah",
+          "hasil": "Modal terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "P22",
+          "kebutuhan": "Daftar Urusan: form ubah",
+          "hasil": "Modal terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "P23",
+          "kebutuhan": "Daftar Urusan: tutup modal",
+          "hasil": "Ditutup tanpa simpan.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "INOVASI DAERAH - DAFTAR & INDIKATOR"
+        },
+        {
+          "no": "I1",
+          "kebutuhan": "Daftar Inovasi: akses",
+          "hasil": "Halaman terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "I2",
+          "kebutuhan": "Daftar Inovasi: kolom",
+          "hasil": "Rincian, OPD, Nama Inovasi, Skor, Waktu, Option.",
+          "status": "PASS"
+        },
+        {
+          "no": "I3",
+          "kebutuhan": "Daftar Inovasi: pilihan baris",
+          "hasil": "10/25/50/100 tersedia.",
+          "status": "PASS"
+        },
+        {
+          "no": "I4",
+          "kebutuhan": "Daftar Inovasi: ekspor",
+          "hasil": "XLSX 18.842 byte, PDF 75.513 byte valid.",
+          "status": "PASS"
+        },
+        {
+          "no": "I5",
+          "kebutuhan": "Daftar Inovasi: filter tahun",
+          "hasil": "Ganti 2025 → kosong, bekerja.",
+          "status": "PASS"
+        },
+        {
+          "no": "I6",
+          "kebutuhan": "Daftar Inovasi: pagination",
+          "hasil": "Next menggeser baris.",
+          "status": "PASS"
+        },
+        {
+          "no": "I7",
+          "kebutuhan": "Daftar Inovasi: perluas",
+          "hasil": "Baris diperluas tampil indikator.",
+          "status": "PASS"
+        }
       ]
     },
     {
-      "pageNumber": 4, "isLastPage": false,
+      "pageNumber": 4,
+      "isLastPage": false,
       "rows": [
-        { "isSection": true, "text": "KELITBANGAN & LAPORAN" },
-        { "no": "K1", "kebutuhan": "Kelitbangan: menu", "hasil": "Menu terbuka." }
+        {
+          "isSection": true,
+          "text": "INOVASI DAERAH - DAFTAR & INDIKATOR"
+        },
+        {
+          "no": "I8",
+          "kebutuhan": "Daftar Inovasi: indikator",
+          "hasil": "4 baris indikator dengan Upload/Delete.",
+          "status": "PASS"
+        },
+        {
+          "no": "I9",
+          "kebutuhan": "Daftar Inovasi: modal upload",
+          "hasil": "Modal terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "I10",
+          "kebutuhan": "Daftar Inovasi: tutup modal",
+          "hasil": "Modal tertutup tanpa unggah.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "INOVASI DAERAH - TAMBAH"
+        },
+        {
+          "no": "I11",
+          "kebutuhan": "Tambah Inovasi: form",
+          "hasil": "Form terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "I12",
+          "kebutuhan": "Tambah Inovasi: validasi kosong",
+          "hasil": "Klik Send memicu validasi.",
+          "status": "PASS"
+        },
+        {
+          "no": "I13",
+          "kebutuhan": "Tambah Inovasi: form tetap",
+          "hasil": "Form tetap terbuka.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "KELITBANGAN & LAPORAN"
+        },
+        {
+          "no": "K1",
+          "kebutuhan": "Kelitbangan: menu",
+          "hasil": "Menu terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "K2",
+          "kebutuhan": "Kelitbangan: fungsi riset",
+          "hasil": "8 baris riset, modal upload terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "L1",
+          "kebutuhan": "Laporan: menu",
+          "hasil": "Halaman terbuka lengkap filter.",
+          "status": "PASS"
+        },
+        {
+          "no": "L2",
+          "kebutuhan": "Laporan: jenis/filter",
+          "hasil": "Ganti tahun 2020 mengubah tampilan.",
+          "status": "PASS"
+        },
+        {
+          "no": "L3",
+          "kebutuhan": "Laporan: ekspor",
+          "hasil": "PDF 200, Excel 200 attachment.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "UTILITY - PENGGUNA & GROUP"
+        },
+        {
+          "no": "U1",
+          "kebutuhan": "Utility User: daftar",
+          "hasil": "Tabel dengan Action, Username, Full Name, Group.",
+          "status": "PASS"
+        },
+        {
+          "no": "U2",
+          "kebutuhan": "Utility User: form tambah",
+          "hasil": "Modal Create User terbuka.",
+          "status": "PASS"
+        },
+        {
+          "no": "U3",
+          "kebutuhan": "Utility User: struktur form",
+          "hasil": "Nama, Username, Password, OPD, Group, Is Admin.",
+          "status": "PASS"
+        },
+        {
+          "no": "U4",
+          "kebutuhan": "Utility User: pilihan Is Admin",
+          "hasil": "'lya, saya admin'/'Bukan'.",
+          "status": "PASS"
+        },
+        {
+          "no": "U5",
+          "kebutuhan": "Utility User: form tambah group",
+          "hasil": "Simpan tidak menambah group.",
+          "status": "FAIL"
+        },
+        {
+          "no": "U6",
+          "kebutuhan": "Utility User: daftar group",
+          "hasil": "Group tampil, hak akses belum diuji.",
+          "status": "PASS"
+        },
+        {
+          "no": "U7",
+          "kebutuhan": "Utility User: edit/hapus group",
+          "hasil": "Modal edit terbuka, tidak ada perubahan.",
+          "status": "PASS"
+        }
       ]
     },
     {
-      "pageNumber": 5, "isLastPage": true,
+      "pageNumber": 5,
+      "isLastPage": true,
       "rows": [
-        { "isSection": true, "text": "GATE ULO YANG BELUM TERBUKTI" },
-        { "no": "X1", "kebutuhan": "CRUD: simpan & baca ulang", "hasil": "CREATE GAGAL, recordsTotal tetap." },
-        { "no": "X5", "kebutuhan": "Laporan: render & ekspor", "hasil": "PDF & Excel terverifikasi." }
+        {
+          "isSection": true,
+          "text": "UTILITY - PENGGUNA & GROUP"
+        },
+        {
+          "no": "U8",
+          "kebutuhan": "Utility User: tutup form",
+          "hasil": "Modal tertutup.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "UTILITY - OTORITAS & PENGATURAN"
+        },
+        {
+          "no": "U9",
+          "kebutuhan": "Otoritas Menu: akses",
+          "hasil": "Dropdown Group Otorisasi kosong, matriks tidak termuat.",
+          "status": "FAIL"
+        },
+        {
+          "no": "U10",
+          "kebutuhan": "Log Login",
+          "hasil": "982 entri, filter & ekspor tampil.",
+          "status": "PASS"
+        },
+        {
+          "no": "U11",
+          "kebutuhan": "Konfigurasi",
+          "hasil": "Field daerah, kota, ta_list, informasi, tombol.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "NAVIGASI & LAINNYA"
+        },
+        {
+          "no": "N1",
+          "kebutuhan": "Sidebar: menu utama",
+          "hasil": "Struktur terlihat.",
+          "status": "PASS"
+        },
+        {
+          "no": "N2",
+          "kebutuhan": "Sidebar: submenu Parameter",
+          "hasil": "OPD, Kecamatan, Gampong, Urusan.",
+          "status": "PASS"
+        },
+        {
+          "no": "N3",
+          "kebutuhan": "Sidebar: submenu Inovasi",
+          "hasil": "Daftar dan Tambah Inovasi.",
+          "status": "PASS"
+        },
+        {
+          "no": "N4",
+          "kebutuhan": "Sidebar: submenu Utility",
+          "hasil": "User, Otoritas, Log Login, Konfigurasi.",
+          "status": "PASS"
+        },
+        {
+          "no": "N5",
+          "kebutuhan": "Header: ikon & profil",
+          "hasil": "Logo, pencarian, fullscreen, profil.",
+          "status": "PASS"
+        },
+        {
+          "no": "N6",
+          "kebutuhan": "Responsive/sidebar",
+          "hasil": "Kontrol collapse terlihat, respon tidak terbukti.",
+          "status": "FAIL"
+        },
+        {
+          "no": "O1",
+          "kebutuhan": "Pelaporan: menu",
+          "hasil": "Menu terlihat di sidebar.",
+          "status": "PASS"
+        },
+        {
+          "no": "O2",
+          "kebutuhan": "Pengaturan: menu",
+          "hasil": "Menu terlihat di sidebar.",
+          "status": "PASS"
+        },
+        {
+          "isSection": true,
+          "text": "GATE ULO YANG BELUM TERBUKTI"
+        },
+        {
+          "no": "X1",
+          "kebutuhan": "CRUD: simpan & baca ulang",
+          "hasil": "CREATE GAGAL, recordsTotal tetap.",
+          "status": "FAIL"
+        },
+        {
+          "no": "X2",
+          "kebutuhan": "CRUD: ubah, hapus, pemulihan",
+          "hasil": "UPDATE berhasil, DELETE tidak dapat diuji.",
+          "status": "FAIL"
+        },
+        {
+          "no": "X3",
+          "kebutuhan": "Hak akses: role",
+          "hasil": "Dropdown otorisasi kosong, tidak ada akun non-admin.",
+          "status": "FAIL"
+        },
+        {
+          "no": "X4",
+          "kebutuhan": "Sesi: logout, expiry, unauthorized",
+          "hasil": "Logout mengakhiri sesi, redirect login.",
+          "status": "PASS"
+        },
+        {
+          "no": "X5",
+          "kebutuhan": "Laporan: render & ekspor",
+          "hasil": "PDF & Excel terverifikasi.",
+          "status": "PASS"
+        }
       ]
     }
   ]

@@ -1,45 +1,55 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ulo_uat
       POSTGRES_USER: ulo
-      POSTGRES_PASSWORD: ulo_secret
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-ulo_local_only}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./db/schema-auth.sql:/docker-entrypoint-initdb.d/02-auth.sql:ro
-      - ./db/seed-projects.sql:/docker-entrypoint-initdb.d/03-proj.sql:ro
-      - ./db/seed-users.sql:/docker-entrypoint-initdb.d/04-users.sql:ro
-      - ./db/seed-sirikap-items.sql:/docker-entrypoint-initdb.d/05-sirikap.sql:ro
-      - ./db/seed-simpeg-items.sql:/docker-entrypoint-initdb.d/06-simpeg.sql:ro
-      - ./templates:/app/templates:ro
-    ports: ["5432:5432"]
+      - ./db/seed-projects.sql:/docker-entrypoint-initdb.d/03-projects.sql:ro
+      - ./db/seed-templates.sql:/docker-entrypoint-initdb.d/04-templates.sql:ro
+      - ./db/seed-users.sql:/docker-entrypoint-initdb.d/05-demo-users.sql:ro
+      - ./db/seed-sirikap-items.sql:/docker-entrypoint-initdb.d/06-sirikap.sql:ro
+      - ./db/seed-simpeg-items.sql:/docker-entrypoint-initdb.d/07-simpeg.sql:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ulo -d ulo_uat"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
 
   api:
     build: .
-    depends_on: [db]
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       PGHOST: db
+      PGPORT: 5432
       PGUSER: ulo
-      PGPASSWORD: ulo_secret
+      PGPASSWORD: ${LOCAL_DB_PASSWORD:-ulo_local_only}
       PGDATABASE: ulo_uat
-      JWT_ACCESS_SECRET: dev-access-secret
-      JWT_REFRESH_SECRET: dev-refresh-secret
+      DB_SCHEMA: ulo_uat
+      NODE_ENV: development
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-development-access-secret-32-characters}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-development-refresh-secret-32-characters}
+      WORKER_UPLOAD_DIR: /app/output
     ports: ["3000:3000"]
     volumes:
       - ./output:/app/output
-      - ./public:/app/public
-      - ./templates:/app/templates:ro
       - ./fixtures:/app/fixtures
-    command: ["node", "src/server.js"]
+    command: ["serve"]
     shm_size: 512m
 
   worker:
     build: .
-    depends_on: [db]
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./output:/app/output
       - ./fixtures:/app/fixtures
@@ -50,7 +60,6 @@ services:
   admin-ui:
     build:
       context: ./admin-ui
-      dockerfile: Dockerfile
     ports: ["5173:5173"]
     depends_on: [api]
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

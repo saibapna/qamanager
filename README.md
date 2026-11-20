@@ -1,42 +1,100 @@
 # ULO/UAT Manager
 
-Sistem manajemen Uji Layak Operasi (ULO) & User Acceptance Test (UAT) **multi-project**
-dengan output PDF **1=1** identik dengan format resmi S-APP.2.OBJ.3/4/5.
+Hono/Cloudflare Workers API + React admin UI (Cloudflare target), dengan Express sebagai backend legacy/lokal untuk Uji Layak Operasi (ULO) / User Acceptance Test (UAT) multi-project. SIRIKAP dan SIMPEG memiliki 71 kasus uji masing-masing. Status `PASS`/`FAIL`/`BELUM` dihitung otomatis.
 
-## Quick Start (Docker)
+> **Status:** MVP dalam pengujian. PDF **belum** terbukti identik 1:1 dengan lampiran resmi (fixture baseline belum disediakan). Ini bukan aplikasi yang telah lolos audit produksi.
+
+## Jalankan lokal dengan Docker
 
 ```bash
 cp .env.example .env
-node scripts/generate-user-seed.mjs
-docker compose up -d
-# API Docs  : http://localhost:3000/docs
-# Admin UI  : http://localhost:5173
-# Login     : admin@sirikap.id / password123
+# Gunakan nilai acak untuk JWT_ACCESS_SECRET dan JWT_REFRESH_SECRET di .env.
+node scripts/build-template-seed.mjs
+npm install
+node scripts/generate-user-seed.mjs    # HANYA untuk database demo lokal
+node scripts/build-openapi.js
+docker compose up -d --build
 ```
 
-## Login Demo
+Akses UI: http://localhost:5173 — API: http://localhost:3000 — Swagger: http://localhost:3000/docs. Akun demo **lokal saja**: `admin@sirikap.id` / `password123`. Jangan gunakan akun demo di internet.
 
-| Email | Project | Role |
-|---|---|---|
-| admin@sirikap.id | SIRIKAP | ADMIN |
-| tester@sirikap.id | SIRIKAP | TESTER |
-| witness@sirikap.id | SIRIKAP | WITNESS |
-| admin@simpeg.id | SIMPEG | ADMIN |
-| tester@simpeg.id | SIMPEG | TESTER |
+Database lokal diinisialisasi dari SQL bernomor di `docker-compose.yml`. Jika mengubah seed setelah volume dibuat, jangan berasumsi PostgreSQL akan menjalankan ulang file init; gunakan migrasi terkontrol. Tidak perlu menyimpan password atau secret di source code.
 
-Password semua: password123
+## Deploy database ke Supabase (PostgreSQL, backend langsung)
 
-## Dokumentasi
+1. Pilih atau buat project Supabase khusus QA Manager. Verifikasi terlebih dahulu bahwa Anda tidak mengubah database layanan lain.
+2. Jalankan `node scripts/build-template-seed.mjs && node scripts/build-supabase-bootstrap.mjs`. SQL akhir ada di `db/supabase-bootstrap.sql`; SQL tersebut membuat **schema privat `ulo_uat`**, tabel, indeks, dan data uji SIRIKAP/SIMPEG tanpa membuat akun demo.
+3. Terapkan SQL tersebut satu kali melalui Supabase SQL Editor atau migration API pada database **kosong**. Jangan ulangi bootstrap pada database dengan data ULO existing.
+4. Di backend server (BUKAN React/browser), isi `.env` sebagai berikut:
 
-- PRD: `prd/PRD-ULO-UAT-Manager.md`
-- Spesifikasi Teknis PDF 1=1: `spec-tech/Spesifikasi-Teknis-Template-PDF.md`
-- Arsitektur Multi-Project: `spec-tech/Arsitektur-Multi-Project.md`
-- API Docs: `api-docs/openapi.yaml` atau `http://localhost:3000/docs`
+   ```dotenv
+   DATABASE_URL=postgresql://postgres.PROJECT_REF:DB_PASSWORD@SESSION_POOLER_HOST:5432/postgres
+   DB_SSL=true
+   DB_SCHEMA=ulo_uat
+   JWT_ACCESS_SECRET=<random-strong-secret-32-plus-chars>
+   JWT_REFRESH_SECRET=<different-random-strong-secret-32-plus-chars>
+   NODE_ENV=production
+   ```
 
-## Alur Utama
+   Ambil `DATABASE_URL` dari **Supabase Dashboard → Connect → Session Pooler**, jangan gunakan service-role key sebagai password. Hindari memasukkan credential ke GitHub Actions yang tampil dalam log.
+5. Buat admin dengan variabel lingkungan `ADMIN_EMAIL`, `ADMIN_PASSWORD` (minimal 12 karakter), `ADMIN_PROJECT_CODE=SIRIKAP`, lalu jalankan `npm run admin:bootstrap` **dari backend tepercaya**. Tidak ada password admin yang otomatis dipublikasikan.
+6. Untuk menjalankan API/UI tanpa PostgreSQL lokal: `docker compose -f docker-compose.supabase.yml up -d --build`.
 
-1. Login → buat project
-2. Upload template (HBS + kategori_map + page_map) + fixture
-3. Buat aplikasi & sesi ULO
-4. Isi item uji (PASS/FAIL/BELUM)
-5. Generate PDF → validasi 1=1 → diff viewer visual
+Database hanya diakses lewat server Express (library `pg`), bukan Supabase JS dari browser. Schema privat dan RLS tanpa kebijakan publik menjaga agar tabel tidak terbuka melalui Data API; backend memakai koneksi tepercaya pemilik skema. Gunakan TLS dan kelola kredensial melalui secrets manager untuk deployment nyata.
+
+## Cloudflare Hono (target deployment)
+
+Backend untuk Cloudflare menggunakan **Hono** (`admin-ui/functions/api/[[path]].js`) dan `pg` via Cloudflare Hyperdrive, bukan Express yang membutuhkan Node.js server. `admin-ui/worker/index.ts` melayani React SPA dan meneruskan `/api/*` ke Hono; build bundle dengan `cd admin-ui && npm install && npm run build && npm run build:worker`. Lihat `admin-ui/README-cloudflare.md` untuk konfigurasi nodejs_compat, secrets, dan keterbatasan fitur. PDF Chromium/Python masih hanya dapat dijalankan di backend eksternal, **tidak aktif pada Worker**. Integrasi Cloudflare dan build belum dinyatakan siap produksi hingga lulus smoke-test.
+
+## Pengujian
+
+```bash
+npm test                # seluruh tes, membutuhkan npm install
+npm run test:unit       # subset tes tanpa dependensi eksternal
+npm run openapi         # validasi dan build OpenAPI
+npm run build           # PDF demo lengkap 71 item
+```
+
+Tes regresi memeriksa 71 item per project, tidak ada item ganda/hilang dalam page-map, serta role access berdasarkan pemilik resource. Validasi PDF piksel menggunakan `fixtures/lampiran.pdf` yang **tidak termasuk dalam repository**. Jumlah halaman fisik output harus diukur di lingkungan Chromium dan dibandingkan dengan fixture resmi; page-map hanya menjamin alokasi data, **bukan** identitas visual.
+
+## Keamanan & keterbatasan
+
+- Jalankan service API hanya melalui HTTPS reverse proxy; rate limiting dan JWT bukan pengganti HTTPS.
+- Pengguna hanya dapat mengakses resource di project yang diizinkan oleh `project_members`. Hak akses dicek lagi ke database, tidak mempercayai role dari request body.
+- Token di UI masih tersimpan di localStorage; pertimbangkan migrasi ke cookie `HttpOnly` untuk produksi yang menghadapi risiko XSS.
+- Tanda tangan digital, audit retensi 5 tahun, defect log, dan persetujuan multi-level belum lengkap.
+- Jangan mengunggah dump produksi yang memuat data pribadi ke GitHub publik. Review data kontak di seed sebelum menyebarkannya.
+- Docker build belum diverifikasi di lingkungan ini; dependensi npm memerlukan koneksi registry. Lockfile perlu dihasilkan dan di-commit setelah `npm install` di mesin dengan internet.
+
+## Struktur penting
+
+- `db/schema.sql`, `db/schema-auth.sql` — model data & schema privat.
+- `db/seed-templates.sql` — template HBS ter-embed dengan SHA-256.
+- `db/supabase-bootstrap.sql` — skrip bootstrap untuk Supabase tanpa demo users.
+- `src/auth/authorization.js` — otorisasi berbasis resource.
+- `src/layout/page-map.js` — pembagian item tanpa duplikasi.
+- `scripts/bootstrap-admin.mjs` — provision admin dengan password rahasia.
+- `api-docs/openapi.yaml` — kontrak OpenAPI.
+- `prd/`, `spec-tech/` — requirement dan rancangan.
+
+## Cloudflare (Hono, staging)
+
+Untuk deployment Cloudflare, kode Hono berada di
+`admin-ui/functions/api/[[path]].ts`; frontend React di-serve oleh Cloudflare
+Pages dan Hono menangani `/api/*`. Saat ini hanya `/api/status` dan
+`/api/health` aktif (cek database Supabase secara read-only). Endpoint autentikasi,
+CRUD, dan PDF sengaja mengembalikan 503 sampai implementasi aman selesai.
+Lihat `admin-ui/README-cloudflare.md` untuk langkah deploy dan batasannya.
+Jangan menganggap staging sudah layak untuk transaksi ULO produksi.
+
+
+## Cloudflare staging (Hono)
+
+Cloudflare Pages serves the React frontend and a Hono Pages Function at
+`admin-ui/functions/api/[[path]].ts`. Only API status and a protected
+read-only Supabase database probe are available. Other API routes intentionally
+return HTTP 503 until production authentication and CRUD are integrated.
+
+The complete PDF/validation pipeline still requires a separate runtime with
+Chromium/Puppeteer and Python, not a plain Cloudflare Worker. See
+`admin-ui/README-cloudflare.md`.

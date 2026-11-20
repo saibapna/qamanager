@@ -4,79 +4,131 @@ info:
   version: 1.0.0
   description: Multi-project ULO/UAT API dengan output PDF 1=1.
 servers:
-  - url: http://localhost:3000/api
+- url: http://localhost:3000/api
 tags:
-  - name: Auth
-  - name: Projects
-  - name: Templates
-  - name: Aplikasi
-  - name: Sesi
-  - name: Validate
+- name: Auth
+- name: Projects
+- name: Templates
+- name: Aplikasi
+- name: Sesi
+- name: Validate
 security:
-  - BearerAuth: []
+- BearerAuth: []
 components:
   securitySchemes:
-    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     Error:
       type: object
-      properties: { error: { type: string } }
+      properties:
+        error:
+          type: string
     LoginInput:
       type: object
-      required: [email, password]
+      required:
+      - email
+      - password
       properties:
-        email: { type: string, format: email }
-        password: { type: string }
+        email:
+          type: string
+          format: email
+        password:
+          type: string
     User:
       type: object
       properties:
-        id: { type: integer }
-        email: { type: string }
-        nama: { type: string }
-        projects: { type: array, items: { $ref: '#/components/schemas/UserProject' } }
+        id:
+          type: integer
+        email:
+          type: string
+        nama:
+          type: string
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserProject'
     UserProject:
       type: object
       properties:
-        project_id: { type: integer }
-        kode: { type: string }
-        nama: { type: string }
-        role: { type: string, enum: [ADMIN, TESTER, WITNESS, APPROVER, AUDITOR] }
+        project_id:
+          type: integer
+        kode:
+          type: string
+        nama:
+          type: string
+        role:
+          type: string
+          enum:
+          - ADMIN
+          - TESTER
+          - WITNESS
+          - APPROVER
+          - AUDITOR
     Project:
       type: object
       properties:
-        id: { type: integer }
-        kode: { type: string }
-        nama: { type: string }
-        instansi: { type: string }
-        bidang: { type: string }
-        aktif: { type: boolean }
+        id:
+          type: integer
+        kode:
+          type: string
+        nama:
+          type: string
+        instansi:
+          type: string
+        bidang:
+          type: string
+        aktif:
+          type: boolean
     Template:
       type: object
       properties:
-        id: { type: integer }
-        versi: { type: string }
-        nama: { type: string }
-        published: { type: boolean }
+        id:
+          type: integer
+        versi:
+          type: string
+        nama:
+          type: string
+        published:
+          type: boolean
     Sesi:
       type: object
       properties:
-        id: { type: integer }
-        status: { type: string, enum: [DRAFT, FINAL, SIGNED] }
+        id:
+          type: integer
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - FINAL
+          - SIGNED
     Item:
       type: object
       properties:
-        no: { type: string }
-        kategori: { type: string }
-        kebutuhan: { type: string }
-        hasil: { type: string }
-        status: { type: string, enum: [PASS, FAIL, BELUM] }
+        false:
+          type: string
+        kategori:
+          type: string
+        kebutuhan:
+          type: string
+        hasil:
+          type: string
+        status:
+          type: string
+          enum:
+          - PASS
+          - FAIL
+          - BELUM
 paths:
   /health:
     get:
-      summary: Health check
+      summary: Health check API (GET /api/health)
       security: []
       responses:
-        '200': { description: OK }
+        '200':
+          description: OK
   /auth/login:
     post:
       summary: Login
@@ -85,97 +137,309 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LoginInput' }
+            schema:
+              $ref: '#/components/schemas/LoginInput'
       responses:
-        '200': { description: Login sukses }
-        '401': { description: Kredensial salah }
+        '200':
+          description: Login sukses
+        '401':
+          description: Kredensial salah
   /auth/me:
     get:
       summary: Profil user
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /projects:
     get:
       summary: List project
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
     post:
       summary: Buat project
-      responses: { '201': { description: OK } }
+      responses:
+        '201':
+          description: OK
   /projects/{projectId}:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: integer } }
-    get: { summary: Detail project, responses: { '200': { description: OK } } }
-    patch: { summary: Update project, responses: { '200': { description: OK } } }
-    delete: { summary: Hapus project, responses: { '204': { description: OK } } }
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Detail project
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update project
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Arsipkan project (soft delete)
+      responses:
+        '204':
+          description: OK
   /projects/{projectId}/templates:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: integer } }
-    get: { summary: List template, responses: { '200': { description: OK } } }
-    post: { summary: Buat template, responses: { '201': { description: OK } } }
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: List template
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Buat template
+      responses:
+        '201':
+          description: OK
   /templates/{templateId}:
     parameters:
-      - { name: templateId, in: path, required: true, schema: { type: integer } }
-    get: { summary: Detail template, responses: { '200': { description: OK } } }
-    patch: { summary: Update template, responses: { '200': { description: OK } } }
-    delete: { summary: Hapus template, responses: { '204': { description: OK } } }
+    - name: templateId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Detail template
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update template
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Hapus template
+      responses:
+        '204':
+          description: OK
   /templates/{templateId}/publish:
     post:
       parameters:
-        - { name: templateId, in: path, required: true, schema: { type: integer } }
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Publish template
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /templates/{templateId}/fixtures:
     post:
       parameters:
-        - { name: templateId, in: path, required: true, schema: { type: integer } }
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Upload fixture baseline
       requestBody:
         content:
           multipart/form-data:
             schema:
               type: object
-              properties: { file: { type: string, format: binary } }
-      responses: { '201': { description: OK } }
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: OK
   /projects/{projectId}/aplikasi:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: integer } }
-    get: { summary: List aplikasi, responses: { '200': { description: OK } } }
-    post: { summary: Buat aplikasi, responses: { '201': { description: OK } } }
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: List aplikasi
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Buat aplikasi
+      responses:
+        '201':
+          description: OK
   /aplikasi/{aplikasiId}/sesi:
     parameters:
-      - { name: aplikasiId, in: path, required: true, schema: { type: integer } }
-    get: { summary: List sesi, responses: { '200': { description: OK } } }
-    post: { summary: Buat sesi, responses: { '201': { description: OK } } }
+    - name: aplikasiId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: List sesi
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Buat sesi
+      responses:
+        '201':
+          description: OK
   /sesi/{sesiId}:
     parameters:
-      - { name: sesiId, in: path, required: true, schema: { type: integer } }
-    get: { summary: Detail sesi, responses: { '200': { description: OK } } }
-    patch: { summary: Update sesi, responses: { '200': { description: OK } } }
+    - name: sesiId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Detail sesi
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update sesi
+      responses:
+        '200':
+          description: OK
   /sesi/{sesiId}/items:
     put:
       parameters:
-        - { name: sesiId, in: path, required: true, schema: { type: integer } }
+      - name: sesiId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Bulk upsert item
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
   /sesi/{sesiId}/pdf:
     post:
       parameters:
-        - { name: sesiId, in: path, required: true, schema: { type: integer } }
+      - name: sesiId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Generate PDF 1=1
       responses:
         '200':
           description: PDF binary
           content:
             application/pdf:
-              schema: { type: string, format: binary }
+              schema:
+                type: string
+                format: binary
   /templates/{templateId}/validate:
     post:
       parameters:
-        - { name: templateId, in: path, required: true, schema: { type: integer } }
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Validasi 1=1
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - outputPath
+              properties:
+                outputPath:
+                  type: string
+                  description: Path PDF output yang tercatat dalam ulo_output pada template ini
   /templates/{templateId}/diff:
     post:
       parameters:
-        - { name: templateId, in: path, required: true, schema: { type: integer } }
+      - name: templateId
+        in: path
+        required: true
+        schema:
+          type: integer
       summary: Diff visual SSIM
-      responses: { '200': { description: OK } }
+      responses:
+        '200':
+          description: OK
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - outputPath
+              properties:
+                outputPath:
+                  type: string
+                  description: Path PDF output yang tercatat dalam ulo_output pada template ini
+  /auth/refresh:
+    post:
+      summary: Rotasi refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token baru
+        '401':
+          description: Invalid/revoked
+  /auth/logout:
+    post:
+      summary: Cabut refresh token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /sesi/{sesiId}/outputs:
+    get:
+      summary: Daftar PDF ber-versi
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: OK
+  /sesi/{sesiId}/finalize:
+    post:
+      summary: Finalisasi sesi setelah semua item diuji dan gate X1-X5 PASS (jika ada)
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: FINAL
+        '422':
+          description: Gate belum terpenuhi

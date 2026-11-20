@@ -8,8 +8,8 @@ import { LogIn } from 'lucide-react';
 export function LoginPage() {
   const nav = useNavigate();
   const setSession = useAuth(s => s.setSession);
-  const [email, setEmail] = useState('admin@sirikap.id');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +28,10 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
         <h1 className="text-2xl font-bold text-center mb-6">ULO/UAT Manager</h1>
+        <p className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          Lingkungan staging. Database sudah dipersiapkan, tetapi login dan pengelolaan UAT belum diaktifkan di Cloudflare.
+          Status koneksi dapat diperiksa di <a className="underline" href="/api/health">/api/health</a>.
+        </p>
         <form onSubmit={onSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Email</label>

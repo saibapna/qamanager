@@ -1,3 +1,4 @@
+SET search_path TO ulo_uat, public;
 -- Jalankan: node scripts/generate-user-seed.mjs untuk mengisi file ini dengan hash asli
 -- Placeholder (hash untuk password "password123" akan di-generate otomatis)
 INSERT INTO users (email, nama, password_hash) VALUES

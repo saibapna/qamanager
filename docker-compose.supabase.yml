@@ -1,0 +1,22 @@
+# Standalone deployment using Supabase's server-side PostgreSQL connection.
+# Requires .env with DATABASE_URL, DB_SSL=true and strong JWT secrets.
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DB_SCHEMA: ulo_uat
+      DB_SSL: "true"
+      WORKER_UPLOAD_DIR: /app/output
+    ports: ["3000:3000"]
+    volumes:
+      - ./output:/app/output
+    command: ["serve"]
+    shm_size: 512m
+  admin-ui:
+    build:
+      context: ./admin-ui
+    ports: ["5173:5173"]
+    depends_on: [api]
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { TemplateRegistry } from './template-registry.js';
+import { paginateItems } from './layout/page-map.js';
 
 export async function generateULOPdfForSesi({ db, sesiId, outPath, registry }) {
   registry ||= new TemplateRegistry(db);
@@ -32,7 +33,7 @@ export async function generateULOPdfForSesi({ db, sesiId, outPath, registry }) {
   await fs.writeFile(outPath.replace(/\.pdf$/, '.html'), html, 'utf-8');
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--font-render-hinting=none']
   });
   try {
@@ -54,29 +55,7 @@ export async function generateULOPdfForSesi({ db, sesiId, outPath, registry }) {
 }
 
 function buildDataBinding({ sesi, items, tpl }) {
-  const byCat = {};
-  for (const it of items) (byCat[it.kategori] ||= []).push(it);
-  const pageNumbers = Object.keys(tpl.pageMap).map(Number).sort((a, b) => a - b);
-  const pages = [];
-  for (const pn of pageNumbers) {
-    const spec = tpl.pageMap[pn];
-    const rows = [];
-    for (const cat of spec.categories) {
-      const catItems = byCat[cat] || [];
-      if (!catItems.length) continue;
-      rows.push({ isSection: true, text: tpl.kategoriMap[cat] || cat });
-      for (const it of catItems) {
-        if (spec.lastNo && it.no > spec.lastNo) continue;
-        if (spec.excludeNos?.includes(it.no)) continue;
-        rows.push({ no: it.no, kebutuhan: it.kebutuhan, hasil: it.hasil });
-      }
-    }
-    pages.push({
-      pageNumber: pn,
-      isLastPage: pn === pageNumbers[pageNumbers.length - 1],
-      rows
-    });
-  }
+  const pages = paginateItems(items, tpl.pageMap, tpl.kategoriMap);
   const total = items.length;
   const lulus = items.filter(i => i.status === 'PASS').length;
   const gagal = items.filter(i => i.status === 'FAIL').length;
@@ -115,12 +94,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const headerSrc = await fs.readFile('templates/partials/header.hbs', 'utf-8');
   Handlebars.registerPartial('header', headerSrc);
   const html = Handlebars.compile(tplSrc)(data);
-  await fs.mkdir('output', { recursive: true });
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
   const puppeteer = (await import('puppeteer')).default;
-  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  await page.pdf({ path: outPath, format: 'A4', printBackground: true,
+  await page.pdf({ path: outPath, format: 'A4', printBackground: true, preferCSSPageSize:true,
     margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
   await browser.close();
   console.log('✅ PDF:', outPath);

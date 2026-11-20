@@ -22,7 +22,8 @@ export function ValidatePage() {
 
   const mut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; log: string }>(`/templates/${templateId}/validate`, { output }).then(r => r.data),
-    onSuccess: setResult
+    onSuccess: setResult,
+    onError: (e:Error) => setResult({ok:false,log:e.message})
   });
 
   return (
@@ -43,7 +44,7 @@ export function ValidatePage() {
             </select>
           </FormField>
           <FormField label="Path PDF Output" required>
-            <input value={output} onChange={e => setOutput(e.target.value)} className={inputCls} placeholder="output/ulo.pdf" />
+            <input value={output} onChange={e => setOutput(e.target.value)} className={inputCls} placeholder="output/project-1/ulo-1-xxxx.pdf" />
           </FormField>
           <button onClick={() => mut.mutate()} disabled={!templateId || !output}
             className="w-full flex items-center justify-center gap-2 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">

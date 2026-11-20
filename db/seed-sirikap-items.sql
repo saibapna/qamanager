@@ -1,12 +1,13 @@
+SET search_path TO ulo_uat, public;
 INSERT INTO aplikasi (project_id, nama_singkat, nama_panjang, url)
 SELECT p.id, 'SIRIKAP', 'Sistem Inovasi dan Riset Kabupaten Pidie',
        'https://sirikap.dev-government.my.id/'
 FROM projects p WHERE p.kode='SIRIKAP';
 
-INSERT INTO ulo_sesi (aplikasi_id, template_id, hari, tanggal, pukul, tempat, jenis,
+INSERT INTO ulo_sesi (project_id, aplikasi_id, template_id, hari, tanggal, pukul, tempat, jenis,
   penguji_nama, penguji_jabatan, penguji_email, penguji_telp, penguji_nip,
   catatan, temuan, status)
-SELECT a.id, t.id, 'Rabu', '2026-11-18', '9:00', 'Pengujian daring',
+SELECT p.id, a.id, t.id, 'Rabu', '2026-11-18', '9:00', 'Pengujian daring',
        'Uji Layak Operasi (ULO) – uji fungsional non-destruktif',
        'Saipul Bahri, S.Kom','Penata Layanan Operasional',
        'saipulbahri@acehprov.go.id','0823 6220 6200','19880511 202521 1 045',
@@ -15,7 +16,7 @@ SELECT a.id, t.id, 'Rabu', '2026-11-18', '9:00', 'Pengujian daring',
        'DRAFT'
 FROM aplikasi a, templates t, projects p
 WHERE a.nama_singkat='SIRIKAP' AND p.kode='SIRIKAP'
-  AND t.project_id=p.id AND t.versi='1.0.0';
+  AND t.project_id=p.id AND a.project_id=p.id AND t.versi='1.0.0';
 
 WITH s AS (
   SELECT s.id FROM ulo_sesi s JOIN aplikasi a ON a.id=s.aplikasi_id

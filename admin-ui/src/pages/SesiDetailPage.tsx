@@ -12,6 +12,7 @@ export function SesiDetailPage() {
   const toast = useToast();
   const { data: sesi, isLoading, refetch } = useQuery({ queryKey: ['sesi', sid], queryFn: () => sesiApi.get(sid) });
   const [items, setItems] = useState<Item[] | null>(null);
+  const {data:outputs=[],refetch:refetchOutputs}=useQuery({queryKey:['outputs',sid],queryFn:()=>sesiApi.outputs(sid)});
   const working = items ?? sesi?.items ?? [];
 
   const saveMut = useMutation({
@@ -22,10 +23,11 @@ export function SesiDetailPage() {
 
   const pdfMut = useMutation({
     mutationFn: () => sesiApi.generatePdf(sid),
-    onSuccess: (blob) => { const url = URL.createObjectURL(blob as any); window.open(url); toast.push('success', 'PDF generated'); },
+    onSuccess: (blob) => { const url = URL.createObjectURL(blob as Blob); window.open(url,'_blank','noopener,noreferrer'); setTimeout(()=>URL.revokeObjectURL(url),60000); refetchOutputs();toast.push('success', 'PDF generated'); },
     onError: (e: Error) => toast.push('error', e.message)
   });
 
+  const finalizeMut=useMutation({mutationFn:()=>sesiApi.finalize(sid),onSuccess:()=>{toast.push('success','Sesi final');refetch();},onError:(e:Error)=>toast.push('error',e.message)});
   if (isLoading || !sesi) return <div>Memuat...</div>;
 
   const ringkasan = working.reduce((a, i) => { a.total++; if (i.status === 'PASS') a.lulus++; else if (i.status === 'FAIL') a.gagal++; else a.belum++; return a; }, { total: 0, lulus: 0, gagal: 0, belum: 0 });
@@ -39,10 +41,11 @@ export function SesiDetailPage() {
       <PageHeader title={`Sesi #${sesi.id}`} subtitle={`Status: ${sesi.status}`}
         actions={
           <>
-            <button onClick={() => saveMut.mutate()} disabled={!items}
+            <button onClick={() => saveMut.mutate()} disabled={!items || sesi.status !== 'DRAFT'}
               className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <Save size={16} /> Simpan
             </button>
+            {sesi.status==='DRAFT'&&<button onClick={() => finalizeMut.mutate()} className="px-3 py-2 text-sm border rounded-lg">Finalisasi</button>}
             <button onClick={() => pdfMut.mutate()}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">
               <Download size={16} /> Generate PDF
@@ -57,6 +60,10 @@ export function SesiDetailPage() {
           </div>
         ))}
       </div>
+      {outputs.length>0&&<div className="bg-white rounded-xl border p-4 mb-6">
+        <p className="font-semibold text-sm mb-2">PDF output (salin path untuk Validasi/Diff)</p>
+        {outputs.map(o=><p key={o.id} className="text-xs font-mono text-slate-600 break-all">v{o.versi} · {o.pdf_path}</p>)}
+      </div>}
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
@@ -71,12 +78,12 @@ export function SesiDetailPage() {
           <tbody>
             {working.map((it, idx) => (
               <tr key={idx} className="border-t">
-                <td className="px-3 py-2"><input value={it.no} onChange={e => update(idx, { no: e.target.value })} className="w-full px-2 py-1 border rounded text-xs font-mono" /></td>
-                <td className="px-3 py-2"><input value={it.kategori} onChange={e => update(idx, { kategori: e.target.value.toUpperCase() })} className="w-full px-2 py-1 border rounded text-xs" /></td>
-                <td className="px-3 py-2"><textarea value={it.kebutuhan} onChange={e => update(idx, { kebutuhan: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
-                <td className="px-3 py-2"><textarea value={it.hasil} onChange={e => update(idx, { hasil: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
+                <td className="px-3 py-2"><input value={it.no} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { no: e.target.value })} className="w-full px-2 py-1 border rounded text-xs font-mono" /></td>
+                <td className="px-3 py-2"><input value={it.kategori} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { kategori: e.target.value.toUpperCase() })} className="w-full px-2 py-1 border rounded text-xs" /></td>
+                <td className="px-3 py-2"><textarea value={it.kebutuhan} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { kebutuhan: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
+                <td className="px-3 py-2"><textarea value={it.hasil} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { hasil: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
                 <td className="px-3 py-2">
-                  <select value={it.status} onChange={e => update(idx, { status: e.target.value as any })} className="w-full px-2 py-1 border rounded text-xs">
+                  <select value={it.status} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { status: e.target.value as Item['status'] })} className="w-full px-2 py-1 border rounded text-xs">
                     <option>PASS</option><option>FAIL</option><option>BELUM</option>
                   </select>
                 </td>

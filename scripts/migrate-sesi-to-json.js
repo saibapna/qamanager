@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { parseArgs } from 'node:util';
 import pg from 'pg';
+import { paginateItems } from '../src/layout/page-map.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -15,7 +16,9 @@ const { values: args } = parseArgs({
 
 async function main() {
   if (!args['sesi-id']) throw new Error('--sesi-id wajib');
-  const cfg = JSON.parse(await fs.readFile(args['db-config'], 'utf-8'));
+  const cfg = process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL, options:'-c search_path=ulo_uat,public', ssl: process.env.DB_SSL === 'true' ? {rejectUnauthorized:true} : undefined }
+    : { ...JSON.parse(await fs.readFile(args['db-config'], 'utf-8')), options:'-c search_path=ulo_uat,public' };
   const db = new pg.Client(cfg);
   await db.connect();
   try {
@@ -42,24 +45,7 @@ async function main() {
 function buildDataBinding({ sesi, items }) {
   const pageMap = typeof sesi.page_map === 'string' ? JSON.parse(sesi.page_map) : sesi.page_map;
   const kategoriMap = typeof sesi.kategori_map === 'string' ? JSON.parse(sesi.kategori_map) : sesi.kategori_map;
-  const byCat = {};
-  for (const it of items) (byCat[it.kategori] ||= []).push(it);
-  const pages = [];
-  const pageNumbers = Object.keys(pageMap).map(Number).sort((a, b) => a - b);
-  for (const pn of pageNumbers) {
-    const spec = pageMap[pn]; const rows = [];
-    for (const cat of spec.categories) {
-      const catItems = byCat[cat] || [];
-      if (!catItems.length) continue;
-      rows.push({ isSection: true, text: kategoriMap[cat] || cat });
-      for (const it of catItems) {
-        if (spec.lastNo && it.no > spec.lastNo) continue;
-        if (spec.excludeNos?.includes(it.no)) continue;
-        rows.push({ no: it.no, kebutuhan: it.kebutuhan, hasil: it.hasil });
-      }
-    }
-    pages.push({ pageNumber: pn, isLastPage: pn === pageNumbers[pageNumbers.length - 1], rows });
-  }
+  const pages = paginateItems(items, pageMap, kategoriMap);
   return {
     project: { instansi: sesi.instansi, bidang: sesi.bidang,
       kode_form_1: 'S-APP.2.OBJ.3', kode_form_2: 'S-APP.2.OBJ.4',

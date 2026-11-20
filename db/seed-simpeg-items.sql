@@ -1,12 +1,13 @@
+SET search_path TO ulo_uat, public;
 INSERT INTO aplikasi (project_id, nama_singkat, nama_panjang, url)
 SELECT p.id, 'SIMPEG', 'Sistem Informasi Kepegawaian Provinsi Aceh',
        'https://simpeg.acehprov.go.id/'
 FROM projects p WHERE p.kode='SIMPEG';
 
-INSERT INTO ulo_sesi (aplikasi_id, template_id, hari, tanggal, pukul, tempat, jenis,
+INSERT INTO ulo_sesi (project_id, aplikasi_id, template_id, hari, tanggal, pukul, tempat, jenis,
   penguji_nama, penguji_jabatan, penguji_email, penguji_telp, penguji_nip,
   catatan, temuan, status)
-SELECT a.id, t.id, 'Kamis','2026-11-19','10:00','Pengujian daring',
+SELECT p.id, a.id, t.id, 'Kamis','2026-11-19','10:00','Pengujian daring',
        'Uji Layak Operasi (ULO) – uji fungsional non-destruktif',
        'Rina Marlina, S.Kom','Analis Sistem Informasi',
        'rina@acehprov.go.id','0812 1111 2222','19900101 202001 2 001',
@@ -14,7 +15,7 @@ SELECT a.id, t.id, 'Kamis','2026-11-19','10:00','Pengujian daring',
        'Temuan: ekspor laporan mutasi belum lengkap.','DRAFT'
 FROM aplikasi a, templates t, projects p
 WHERE a.nama_singkat='SIMPEG' AND p.kode='SIMPEG'
-  AND t.project_id=p.id AND t.versi='1.0.0';
+  AND t.project_id=p.id AND a.project_id=p.id AND t.versi='1.0.0';
 
 WITH s AS (
   SELECT s.id FROM ulo_sesi s JOIN aplikasi a ON a.id=s.aplikasi_id
