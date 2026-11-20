@@ -214,14 +214,14 @@ app.get('/api/projects/:projectId/activity',async c=>{
     FROM audit_events e LEFT JOIN users u ON u.id=e.actor_id
     WHERE e.project_id=$1 ORDER BY e.occurred_at DESC,e.id DESC LIMIT 30`,[pid])).rows);
 });
-const publishLive=async(c,action,sessionId,revision)=>{
+const publishLive=async(c,action,sessionId,revision,targetUserId)=>{
   if(!c.env.PROJECT_LIVE)return;
   const pid=Number(c.get('pid'));
   if(!Number.isSafeInteger(pid)||pid<=0)return;
   try {
     const ns=c.env.PROJECT_LIVE;
     const event={type:'change',projectId:pid,sessionId:Number(sessionId)||null,
-      action,actorId:Number(c.get('uid')),revision:revision===undefined?undefined:Number(revision),at:new Date().toISOString()};
+      action,actorId:Number(c.get('uid')),targetUserId:targetUserId===undefined?undefined:Number(targetUserId),revision:revision===undefined?undefined:Number(revision),at:new Date().toISOString()};
     await ns.get(ns.idFromName('project:'+pid)).fetch(new Request('https://internal/publish',{
       method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(event)
     }));
