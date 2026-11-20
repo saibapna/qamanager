@@ -12,7 +12,7 @@ export function ValidatePage() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [output, setOutput] = useState('');
-  const [result, setResult] = useState<{ ok: boolean; log: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; log: string; method?: string } | null>(null);
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list });
   const { data: templates = [] } = useQuery({
@@ -21,14 +21,14 @@ export function ValidatePage() {
   });
 
   const mut = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; log: string }>(`/templates/${templateId}/validate`, { output }).then(r => r.data),
+    mutationFn: () => api.post<{ ok: boolean; log: string; method?: string }>(`/templates/${templateId}/validate`, { output }).then(r => r.data),
     onSuccess: setResult,
     onError: (e:Error) => setResult({ok:false,log:e.message})
   });
 
   return (
     <>
-      <PageHeader title="Validasi 1=1" subtitle="Bandingkan output dengan fixture baseline" />
+      <PageHeader title="Validasi PDF" subtitle="Periksa kecocokan berkas output dengan fixture baseline (SHA-256)" />
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border p-6">
           <FormField label="Project" required>
@@ -46,6 +46,7 @@ export function ValidatePage() {
           <FormField label="Path PDF Output" required>
             <input value={output} onChange={e => setOutput(e.target.value)} className={inputCls} placeholder="output/project-1/ulo-1-xxxx.pdf" />
           </FormField>
+          <p className="text-xs text-slate-500 mb-3">Output PDF harus sudah dibuat dari sesi dan path-nya tersedia di riwayat PDF. Hasil membandingkan byte file, bukan tampilan visual atau SSIM.</p>
           <button onClick={() => mut.mutate()} disabled={!templateId || !output}
             className="w-full flex items-center justify-center gap-2 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
             <ShieldCheck size={16} /> {mut.isPending ? 'Memvalidasi...' : 'Jalankan'}
@@ -54,7 +55,7 @@ export function ValidatePage() {
         <div className="bg-white rounded-xl border p-6">
           <div className="flex justify-between mb-4">
             <h3 className="font-semibold">Hasil</h3>
-            {result && <Badge variant={result.ok ? 'success' : 'danger'}>{result.ok ? 'LULUS' : 'GAGAL'}</Badge>}
+            {result && <Badge variant={result.ok ? 'success' : 'danger'}>{result.ok ? 'IDENTIK' : 'BERBEDA'}</Badge>}
           </div>
           {!result ? <p className="text-sm text-slate-400">Belum ada hasil</p>
             : <pre className="bg-slate-900 text-slate-100 text-xs p-4 rounded-lg overflow-auto max-h-[400px] whitespace-pre-wrap">{result.log}</pre>}
