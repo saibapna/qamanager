@@ -42,6 +42,13 @@ function assertBindings(settings, phase) {
   return hyperdrive.id;
 }
 
+const previous = await cloudflare(`${apiBase}/deployments`);
+const previousVersions = previous?.deployments?.[0]?.versions;
+assert.ok(Array.isArray(previousVersions) && previousVersions.length > 0,
+  'No previously healthy deployment to roll back to');
+assert.equal(previousVersions.reduce((sum, version) => sum + version.percentage, 0), 100,
+  'Previous deployment traffic percentages are invalid');
+
 const before = await cloudflare(`${apiBase}/settings`);
 const hyperdriveId = assertBindings(before, 'preflight');
 assert.equal(before.compatibility_date, '2026-11-20', 'compatibility date changed; review before auto-deploy');
@@ -60,23 +67,54 @@ form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'applicatio
 form.append('qamanager-worker.mjs', new Blob([code], { type: 'application/javascript+module' }), 'qamanager-worker.mjs');
 
 console.log(`Deploying ${workerName}; preserving ${expected.size} existing bindings`);
-await cloudflare(apiBase, { method: 'PUT', body: form });
+let uploadSucceeded = false;
+try {
+  await cloudflare(apiBase, { method: 'PUT', body: form });
+  uploadSucceeded = true;
 
-const after = await cloudflare(`${apiBase}/settings`);
-assert.equal(assertBindings(after, 'post-deploy'), hyperdriveId, 'Hyperdrive binding changed');
+  const after = await cloudflare(`${apiBase}/settings`);
+  assert.equal(assertBindings(after, 'post-deploy'), hyperdriveId, 'Hyperdrive binding changed');
 
-async function smoke(path, expectedType) {
-  const response = await fetch(hostname + path, { headers: { 'Cache-Control': 'no-cache' } });
-  assert.equal(response.status, 200, `${path} returned HTTP ${response.status}`);
-  assert.match(response.headers.get('content-type') || '', expectedType, `${path} returned wrong Content-Type`);
-  assert.equal(response.headers.get('content-disposition'), null, `${path} unexpectedly downloads`);
-  return response;
+  async function smoke(path, expectedType) {
+    const response = await fetch(hostname + path, { headers: { 'Cache-Control': 'no-cache' } });
+    assert.equal(response.status, 200, `${path} returned HTTP ${response.status}`);
+    assert.match(response.headers.get('content-type') || '', expectedType, `${path} returned wrong Content-Type`);
+    assert.equal(response.headers.get('content-disposition'), null, `${path} unexpectedly downloads`);
+    return response;
+  }
+
+  const page = await smoke('/projects', /^text\\/html\\b/i);
+  assert.match(await page.text(), /<html\\b/i, '/projects did not return an HTML document');
+  const status = await smoke('/api/status', /^application\\/json\\b/i);
+  const result = await status.json();
+  assert.equal(result.service, workerName, 'Wrong Worker answered the status check');
+  assert.equal(result.ready, true, 'API reports missing bindings');
+
+  const health = await smoke('/api/health', /^application\\/json\\b/i);
+  const healthData = await health.json();
+  assert.equal(healthData.ok, true, 'Database health check failed');
+  assert.equal(healthData.database, 'connected', 'Hyperdrive is not connected');
+  console.log('Deploy PASS: /projects is HTML; /api/status ready; /api/health database connected; bindings preserved.');
+} catch (error) {
+  console.error('Deploy verification failed:', error instanceof Error ? error.message : String(error));
+  if (uploadSucceeded) {
+    // A new Worker version was activated but did not pass the production smoke gate.
+    // Restore the previous traffic allocation while keeping the old version intact.
+    try {
+      await cloudflare(`${apiBase}/deployments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy: 'percentage',
+          versions: previousVersions,
+          annotations: { 'workers/message': 'Automatic rollback after failed QA Manager deploy verification' },
+        }),
+      });
+      console.error('ROLLBACK SUCCESS: restored previous Worker version traffic percentages');
+    } catch (rollbackError) {
+      console.error('ROLLBACK FAILURE — manual intervention is required:',
+        rollbackError instanceof Error ? rollbackError.message : String(rollbackError));
+    }
+  }
+  throw error;
 }
-
-const page = await smoke('/projects', /^text\/html\b/i);
-assert.match(await page.text(), /<html\b/i, '/projects did not return an HTML document');
-const status = await smoke('/api/status', /^application\/json\b/i);
-const result = await status.json();
-assert.equal(result.service, workerName, 'Wrong Worker answered the status check');
-assert.equal(result.ready, true, 'API reports missing bindings');
-console.log('Deploy PASS: /projects is HTML; /api/status ready; bindings preserved.');
