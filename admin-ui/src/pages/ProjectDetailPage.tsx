@@ -44,6 +44,7 @@ export function ProjectDetailPage(){
     <PageHeader title={project.nama} subtitle={`${project.kode} • ${project.instansi}`} actions={<Link to={`/projects/${pid}/manage`} className="px-3 py-2 bg-blue-700 text-white rounded text-sm">Kelola Project</Link>}/>
     <div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-white rounded-xl border p-4"><FileCode2 className="text-brand-600 mb-2"/><p className="text-2xl font-bold">{templates.length}</p><p className="text-xs text-slate-500">Template</p></div>
     <div className="bg-white rounded-xl border p-4"><ClipboardList className="text-brand-600 mb-2"/><p className="text-2xl font-bold">{apps.length}</p><p className="text-xs text-slate-500">Aplikasi</p></div></div>
+    <ProjectLivePanel projectId={pid}/>
     <h3 className="font-semibold mb-3">Templates</h3>
     <div className="bg-white rounded-xl border divide-y mb-8">{templates.map(t=><Link key={t.id} to={`/templates/${t.id}`} className="p-4 flex items-center justify-between hover:bg-slate-50">
       <div><p className="font-medium text-sm">{t.nama}</p><p className="text-xs text-slate-500">v{t.versi}</p></div>
