@@ -25,6 +25,9 @@ jobs:
       - name: Bundle Hono and UI into one Cloudflare Worker
         run: npm run build:worker
         working-directory: admin-ui
+      - name: Assert pg-cloudflare workerd path included in Worker bundle
+        run: grep -q 'cloudflare:sockets' worker-dist/qamanager-worker.mjs
+        working-directory: admin-ui
       - uses: actions/upload-artifact@v4
         with:
           name: qamanager-hono-worker
