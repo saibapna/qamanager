@@ -11,10 +11,11 @@ import {Modal} from '@/components/Modal';
 import {inputCls,FormField} from '@/components/FormField';
 import {useToast} from '@/components/Toast';
 import {useAuth} from '@/store/authStore';
+import {ProjectLivePanel} from '@/components/ProjectLivePanel';
 
 function SesiList({app,templateId,canEdit}:{app:Aplikasi;templateId:number;canEdit:boolean}){
   const navigate=useNavigate();const qc=useQueryClient();const toast=useToast();
-  const {data:sessions=[]}=useQuery({queryKey:['sessions',app.id],queryFn:()=>aplikasiApi.sessions(app.id)});
+  const {data:sessions=[]}=useQuery({queryKey:['sessions',app.id],queryFn:()=>aplikasiApi.sessions(app.id),refetchInterval:15000});
   const create=useMutation({mutationFn:()=>aplikasiApi.createSession(app.id,{template_id:templateId,jenis:'Uji Layak Operasi (ULO)',tempat:'Pengujian daring'}),
     onSuccess:s=>{qc.invalidateQueries({queryKey:['sessions',app.id]});navigate(`/sesi/${s.id}`);},
     onError:(e:Error)=>toast.push('error',e.message)});
@@ -32,8 +33,8 @@ export function ProjectDetailPage(){
   const canEdit=useAuth(s=>s.hasRole(pid,'ADMIN','TESTER'));
   const [open,setOpen]=useState(false);const [newApp,setNewApp]=useState({nama_singkat:'',nama_panjang:'',url:''});
   const {data:project}=useQuery({queryKey:['project',pid],queryFn:()=>projectsApi.get(pid)});
-  const {data:templates=[]}=useQuery({queryKey:['templates',pid],queryFn:()=>templatesApi.listByProject(pid)});
-  const {data:apps=[]}=useQuery({queryKey:['aplikasi',pid],queryFn:()=>aplikasiApi.list(pid)});
+  const {data:templates=[]}=useQuery({queryKey:['templates',pid],queryFn:()=>templatesApi.listByProject(pid),refetchInterval:15000});
+  const {data:apps=[]}=useQuery({queryKey:['aplikasi',pid],queryFn:()=>aplikasiApi.list(pid),refetchInterval:15000});
   const create=useMutation({mutationFn:()=>aplikasiApi.create(pid,newApp),onSuccess:()=>{
     qc.invalidateQueries({queryKey:['aplikasi',pid]});toast.push('success','Aplikasi dibuat');setOpen(false);setNewApp({nama_singkat:'',nama_panjang:'',url:''});
   },onError:(e:Error)=>toast.push('error',e.message)});
