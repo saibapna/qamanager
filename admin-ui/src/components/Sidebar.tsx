@@ -1,5 +1,4 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { FolderKanban, FileCode2, ClipboardList, ShieldCheck, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/store/authStore';
@@ -12,13 +11,13 @@ const links = [
 export function Sidebar() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
-  const signOut=async()=>{const {accessToken,refreshToken}=useAuth.getState();if(accessToken){try{await axios.post('/api/auth/logout',{refreshToken},{headers:{Authorization:'Bearer '+accessToken},timeout:8000});}catch{/* Still clear local session if network is unavailable. */}}logout();nav('/login');};
+  const signOut=()=>{logout();nav('/login');};
   return (
     <>
     <nav className="md:hidden sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex flex-wrap items-center gap-3" aria-label="Navigasi utama">
       <span className="font-semibold text-sm">ULO/UAT Manager</span>
       {links.map(l=><NavLink key={l.to} to={l.to} className="text-sm underline">{l.label}</NavLink>)}
-      <button onClick={()=>{logout();nav('/login');}} className="text-red-300 text-sm ml-auto">Keluar</button>
+      <button onClick={signOut} className="text-red-300 text-sm ml-auto">Keluar</button>
     </nav>
     <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-slate-900 text-slate-100 p-4 flex-col">
       <div className="mb-8">
