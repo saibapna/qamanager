@@ -37,6 +37,11 @@ export class ProjectLive extends DurableObject {
     }
     if (path === '/publish' && request.method === 'POST') {
       const event = await request.json();
+      if(event?.action==='PROJECT_MEMBER_REMOVED' && Number.isSafeInteger(event.targetUserId)) {
+        for(const socket of this.ctx.getWebSockets()){
+          if(Number(socket.deserializeAttachment()?.uid)===event.targetUserId){try{socket.close(1008,'Project access revoked');}catch{}}
+        }
+      }
       if (event?.type !== 'change' || !Number.isSafeInteger(event.projectId)) return new Response('Bad event', { status: 400 });
       this.broadcast(event);
       return new Response(null, { status: 204 });
