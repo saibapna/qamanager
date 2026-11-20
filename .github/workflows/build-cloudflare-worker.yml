@@ -37,6 +37,8 @@ jobs:
       - name: Bundle Hono and UI into one Cloudflare Worker
         run: npm run build:worker
         working-directory: admin-ui
+      - name: Verify Cloudflare deployment and rollback logic (isolated network mock)
+        run: node --test .github/scripts/test-deploy-qamanager-worker.mjs
       - name: Assert pg-cloudflare workerd path included in Worker bundle
         run: grep -q 'cloudflare:sockets' worker-dist/qamanager-worker.mjs
         working-directory: admin-ui
