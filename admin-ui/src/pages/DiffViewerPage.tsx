@@ -1,36 +1,57 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import { api } from '@/api/client';
 import { PageHeader } from '@/components/PageHeader';
 import { FormField, inputCls } from '@/components/FormField';
 import { Badge } from '@/components/Badge';
-import {SecureImage} from '@/components/SecureImage';
 
-interface DP { page: number; ssim?: number; ok?: boolean; refUrl?: string; outUrl?: string; heatmapUrl?: string; }
-interface DR { allPass: boolean; pages: DP[]; }
+interface DP { page: number; ok: boolean; }
+interface DR {
+  allPass: boolean;
+  method: string;
+  description: string;
+  pages: DP[];
+  baselineUrl: string;
+  outputUrl: string;
+}
 
 export function DiffViewerPage() {
   const { id } = useParams<{ id: string }>();
   const [outputPath, setOutputPath] = useState('');
   const [result, setResult] = useState<DR | null>(null);
-  const [active, setActive] = useState(1);
+  const [error, setError] = useState<string | null>(null);
 
   const mut = useMutation({
     mutationFn: () => api.post<DR>(`/templates/${id}/diff`, { outputPath }).then(r => r.data),
-    onSuccess: r => { setResult(r); setActive(1); }
+    onSuccess: r => { setResult(r); setError(null); },
+    onError: (e: Error) => { setResult(null); setError(e.message); }
   });
 
-  const page = result?.pages.find(p => p.page === active);
+  const download = async (route: string, filename: string) => {
+    if (!route.startsWith('/api/')) return;
+    try {
+      const response = await api.get<Blob>(route.replace(/^\/api/, ''), { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Gagal mengunduh PDF'); }
+  };
 
   return (
     <>
-      <PageHeader title="Diff Viewer" subtitle="Visual regression per halaman" />
-      <div className="bg-white rounded-xl border p-4 mb-6">
+      <PageHeader title="Perbandingan PDF" subtitle="Verifikasi kesamaan berkas (SHA-256), bukan diff visual SSIM" />
+      <div className="bg-white rounded-xl border p-5 mb-6">
+        <p className="mb-4 text-sm text-slate-600">
+          Masukkan path output PDF dari halaman sesi ULO. Unggah PDF baseline di halaman template terlebih dahulu.
+          Perbedaan hash tidak selalu menunjukkan perbedaan visual.
+        </p>
         <div className="flex gap-3 items-end">
           <div className="flex-1">
             <FormField label="Path PDF Output" required>
-              <input value={outputPath} onChange={e => setOutputPath(e.target.value)} className={inputCls} />
+              <input value={outputPath} onChange={e => setOutputPath(e.target.value)} className={inputCls}
+                placeholder="output/project-1/sesi-1-v1.pdf" />
             </FormField>
           </div>
           <button onClick={() => mut.mutate()} disabled={!outputPath || mut.isPending}
@@ -39,26 +60,24 @@ export function DiffViewerPage() {
           </button>
         </div>
       </div>
-      {mut.isError && <p className="text-red-600 text-sm mb-4">{mut.error.message}</p>}
+      {error && <p role="alert" className="text-red-700 text-sm mb-4">{error}</p>}
       {result && (
-        <>
-          <div className="flex gap-2 mb-4 flex-wrap">
-            {result.pages.map(p => (
-              <button key={p.page} onClick={() => setActive(p.page)}
-                className={`px-3 py-1.5 rounded text-sm ${active === p.page ? 'bg-brand-600 text-white' : p.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                Hal {p.page} {p.ssim !== undefined && <span className="ml-1 text-xs opacity-75">{p.ssim.toFixed(4)}</span>}
-              </button>
-            ))}
+        <div className="bg-white rounded-xl border p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge variant={result.allPass ? 'success' : 'danger'}>{result.allPass ? 'IDENTIK' : 'BERBEDA'}</Badge>
+            <p className="text-sm text-slate-700">{result.description}</p>
           </div>
-          {page?.ok !== undefined && <Badge variant={page.ok ? 'success' : 'danger'}>{page.ok ? 'IDENTIK' : 'BERBEDA'}</Badge>}
-          {page && (
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Referensi</p><SecureImage src={page.refUrl} alt="PDF referensi" /></div>
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Output</p><SecureImage src={page.outUrl} alt="PDF keluaran" /></div>
-              <div><p className="text-xs font-medium text-slate-500 mb-1">Heatmap</p><SecureImage src={page.heatmapUrl} alt="Heatmap perbedaan" /></div>
-            </div>
-          )}
-        </>
+          <div className="flex gap-4">
+            <button className="flex items-center gap-2 text-blue-700 hover:underline text-sm"
+              onClick={() => download(result.baselineUrl, 'baseline.pdf')}><Download size={16}/> Unduh baseline</button>
+            <button className="flex items-center gap-2 text-blue-700 hover:underline text-sm"
+              onClick={() => download(result.outputUrl, 'hasil-ulo.pdf')}><Download size={16}/> Unduh output</button>
+          </div>
+          <p className="text-xs text-slate-500">
+            {result.pages.length} halaman ditinjau berdasarkan identitas berkas. Preview halaman, SSIM, dan heatmap
+            belum didukung tanpa renderer PDF visual yang terpisah.
+          </p>
+        </div>
       )}
     </>
   );
