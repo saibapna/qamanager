@@ -1,6 +1,6 @@
 
 import {createHash} from 'node:crypto';
-import {hashCloudflarePassword,PROJECT_ROLES} from './workflow-core.js';
+import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState} from './workflow-core.js';
 
 const good=(v,max=255)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
 const optional=v=>typeof v==='string'?v.trim():null;
@@ -185,12 +185,23 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
     return c.json((await q(c,'SELECT id,actor_id,comment,created_at FROM ulo_defect_comments WHERE defect_id=$1 ORDER BY id',[did])).rows);
   });
   app.post('/api/sesi/:sesiId/defects/:defectId/comments',async c=>{
-    const pid=await guard(c,'sesiId'),sid=id(c.req.param('sesiId')),did=id(c.req.param('defectId')),d=await json(c);
+    const pid=await guard(c,'sesiId',['ADMIN','TESTER','WITNESS','APPROVER']),sid=id(c.req.param('sesiId')),did=id(c.req.param('defectId')),d=await json(c);
     if(!good(d?.comment,4000))fail(422,'Komentar harus 1–4000 karakter');
     const exists=await first(c,'SELECT 1 FROM ulo_defects WHERE id=$1 AND sesi_id=$2',[did,sid]);if(!exists)fail(404,'Defect tidak ditemukan');
     const record=await first(c,'INSERT INTO ulo_defect_comments(defect_id,actor_id,comment) VALUES($1,$2,$3) RETURNING id,actor_id,comment,created_at',[did,c.get('uid'),d.comment.trim()]);
     c.set('pid',pid);await audit(c,'DEFECT_COMMENTED','defect',did,{comment_id:record.id});
     return c.json(record,201);
+  });
+  app.post('/api/sesi/:sesiId/reopen',async c=>{
+    const pid=await guard(c,'sesiId',['ADMIN']),sid=id(c.req.param('sesiId'));
+    await q(c,'BEGIN');
+    try{
+      const session=await first(c,'SELECT status,revision FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      if(session?.status!=='FINAL')fail(409,'Hanya sesi FINAL yang dapat dibuka ulang');
+      const result=await first(c,"UPDATE ulo_sesi SET status='DRAFT',revision=revision+1,finalized_at=NULL WHERE id=$1 RETURNING *",[sid]);
+      c.set('pid',pid);await audit(c,'SESI_REOPENED','sesi',sid,{previous_revision:session.revision});
+      await q(c,'COMMIT');return c.json(result);
+    }catch(error){await q(c,'ROLLBACK');throw error;}
   });
   app.get('/api/sesi/:sesiId/approvals',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId'));
@@ -202,8 +213,17 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
     const currentRole=await role(c,pid);
     await q(c,'BEGIN');
     try{
-      const ses=await first(c,'SELECT status,revision FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      const ses=await first(c,'SELECT status,revision,finalized_at FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
       if(ses?.status!=='FINAL')fail(409,'Sesi harus FINAL');
+      // Legacy staging sessions marked FINAL before workflow migration must be reopened and validated.
+      if(!ses.finalized_at)fail(409,'Sesi FINAL lama belum diverifikasi; admin harus buka ulang dan finalisasi dengan aturan baru');
+      // Validate at approval time as well, so a pre-migration or corrupt FINAL cannot be signed.
+      const plan=(await q(c,'SELECT no,kategori,kebutuhan,urutan FROM test_plan_items WHERE project_id=$1 ORDER BY urutan',[pid])).rows;
+      const cases=(await q(c,'SELECT no,kategori,kebutuhan,hasil,status,urutan FROM ulo_item WHERE sesi_id=$1 ORDER BY urutan',[sid])).rows;
+      const project=await first(c,'SELECT require_gate_x FROM projects WHERE id=$1',[pid]);
+      const defects=(await q(c,"SELECT d.status,d.resolution_note,i.no AS item_no,(SELECT r.status FROM ulo_retests r WHERE r.defect_id=d.id ORDER BY r.id DESC LIMIT 1) AS last_retest FROM ulo_defects d JOIN ulo_item i ON i.id=d.item_id WHERE d.sesi_id=$1",[sid])).rows;
+      const validation=checkApprovalState(ses,cases,plan,{requireGateX:project.require_gate_x,defects});
+      if(!validation.ok)fail(422,'Sesi FINAL tidak lolos validasi: '+validation.reason);
       const previous=(await q(c,'SELECT role,decision,actor_id FROM ulo_approvals WHERE sesi_id=$1 AND revision=$2',[sid,ses.revision])).rows;
       if(previous.some(x=>x.role===currentRole))fail(409,'Role telah memberi keputusan');
       if(currentRole==='APPROVER'&&!previous.some(x=>x.role==='WITNESS'&&x.decision==='APPROVED'))fail(409,'Persetujuan saksi wajib terlebih dahulu');
@@ -218,7 +238,7 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
   app.get('/api/sesi/:sesiId/items/:itemId/evidence',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId'));
     if(!await first(c,'SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2',[sid,iid]))fail(404,'Item tidak ditemukan');
-    return c.json((await q(c,'SELECT id,filename,mime,byte_size,sha256,uploaded_by,created_at FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 ORDER BY id DESC',[sid,iid])).rows);
+    return c.json((await q(c,'SELECT id,filename,mime,byte_size,sha256,uploaded_by,created_at FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND deleted_at IS NULL ORDER BY id DESC',[sid,iid])).rows);
   });
   app.post('/api/sesi/:sesiId/items/:itemId/evidence',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN','TESTER']),sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId'));
@@ -228,6 +248,8 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
     const form=await c.req.formData().catch(()=>fail(400,'Multipart tidak valid'));
     const file=form.get('file');
     if(!file||typeof file.arrayBuffer!=='function'||!file.size||file.size>4194304)fail(413,'Bukti maksimal 4 MiB');
+    const existing=await first(c,'SELECT count(*)::int AS total FROM ulo_evidence WHERE item_id=$1 AND deleted_at IS NULL',[iid]);
+    if(existing.total>=10)fail(409,'Maksimal 10 bukti aktif per test case');
     const bytes=new Uint8Array(await file.arrayBuffer());let mime;
     if(bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46) mime='application/pdf';
     else if(bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47) mime='image/png';
@@ -241,14 +263,14 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
   });
   app.get('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId/download',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId')),eid=id(c.req.param('evidenceId'));
-    const row=await first(c,'SELECT data,mime,filename FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND id=$3',[sid,iid,eid]);
+    const row=await first(c,'SELECT data,mime,filename FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND id=$3 AND deleted_at IS NULL',[sid,iid,eid]);
     if(!row)fail(404,'Bukti tidak ditemukan');
     return fileDownload(row.data,row.mime,row.filename);
   });
   app.delete('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN']),sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId')),eid=id(c.req.param('evidenceId'));
     await draft(c,sid);
-    if(!await first(c,'DELETE FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND id=$3 RETURNING id',[sid,iid,eid]))fail(404,'Bukti tidak ditemukan');
+    if(!await first(c,'UPDATE ulo_evidence SET deleted_at=now(),deleted_by=$1 WHERE sesi_id=$2 AND item_id=$3 AND id=$4 AND deleted_at IS NULL RETURNING id',[c.get('uid'),sid,iid,eid]))fail(404,'Bukti tidak ditemukan');
     c.set('pid',pid);await audit(c,'EVIDENCE_DELETED','evidence',eid);return c.body(null,204);
   });
 }

@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 export function ProjectsPage() {
   const nav = useNavigate();
   const isPlatformAdmin=useAuth(s=>!!s.user?.is_platform_admin);
+  const projectRoles=useAuth(s=>s.user?.projects||[]);
   const qc = useQueryClient();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -64,13 +65,13 @@ export function ProjectsPage() {
                   <Badge variant={p.aktif ? 'success' : 'neutral'}>{p.aktif ? 'Aktif' : 'Nonaktif'}</Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => nav(`/projects/${p.id}`)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600 mr-1">
+                  <button onClick={() => nav(`/projects/${p.id}`)} aria-label={`Buka project ${p.nama}`} className="p-1.5 hover:bg-blue-50 rounded text-blue-600 mr-1">
                     <ExternalLink size={16} />
                   </button>
-                  <button onClick={() => confirm(`Hapus ${p.nama}?`) && deleteMut.mutate(p.id)}
+                  {projectRoles.some(x=>x.project_id===p.id&&x.role==='ADMIN')&&<button onClick={() => confirm(`Arsipkan ${p.nama}?`) && deleteMut.mutate(p.id)} aria-label={`Arsipkan project ${p.nama}`}
                     className="p-1.5 hover:bg-red-50 rounded text-red-600">
                     <Trash2 size={16} />
-                  </button>
+                  </button>}
                 </td>
               </tr>
             ))}
