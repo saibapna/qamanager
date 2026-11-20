@@ -313,6 +313,6 @@ app.post('/api/sesi/:sesiId/finalize',async c=>{
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 installPdfRoutes(app,{q,first,guard,id,fail,audit});
-installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json});
+installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publishLive});
 export async function onRequest(ctx){return app.fetch(ctx.request,ctx.env,ctx);}
 export {app};
