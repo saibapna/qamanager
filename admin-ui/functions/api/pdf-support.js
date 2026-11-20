@@ -1,4 +1,4 @@
-import Handlebars from 'handlebars';
+import { renderSafeHandlebars } from './safe-handlebars.js';
 import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
@@ -78,14 +78,9 @@ function buildHtml({ sesi, tpl, items, fail }) {
     ringkasan: { total, lulus, gagal, belum, catatan: sesi.catatan || '', temuan: sesi.temuan || '' },
     pages
   };
-  const engine = Handlebars.create();
-  for (const [name, text] of Object.entries(tpl.partials || {})) {
-    if (typeof text !== 'string' || !/^[a-z][a-z0-9_-]{0,40}$/i.test(name)) fail(422, 'Partial template tidak valid');
-    engine.registerPartial(name, text);
-  }
   let html;
-  try { html = engine.compile(tpl.layout_hbs)(binding); }
-  catch (error) { fail(422, 'Gagal merender template: ' + String(error.message).slice(0, 180)); }
+  try { html=renderSafeHandlebars(tpl.layout_hbs,binding,tpl.partials||{}); }
+  catch(error){ fail(422,'Gagal merender template: '+String(error.message).slice(0,180)); }
   // The Chromium renderer must not issue arbitrary subrequests based on template HTML.
   const csp = '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;; img-src data:; font-src data:; form-action &#39;none&#39;; base-uri &#39;none&#39;">';
   if (!/<head[^>]*>/i.test(html)) fail(422, 'Layout PDF wajib memiliki elemen <head>');
