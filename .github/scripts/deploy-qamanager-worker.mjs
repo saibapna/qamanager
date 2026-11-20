@@ -62,7 +62,7 @@ const metadata = {
   keep_bindings: ['browser', 'hyperdrive', 'secret_text', ...(existingRealtime?['durable_object_namespace']:[])],
   ...(!existingRealtime?{
     bindings:[{name:'PROJECT_LIVE',type:'durable_object_namespace',class_name:'ProjectLive'}],
-    migrations:{tag:'qamanager-realtime-v1',new_sqlite_classes:['ProjectLive']},
+    migrations:{new_tag:'qamanager-realtime-v1',new_sqlite_classes:['ProjectLive']},
   }:{}),
   compatibility_date: before.compatibility_date,
   compatibility_flags: before.compatibility_flags,
