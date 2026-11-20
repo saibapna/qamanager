@@ -4,12 +4,16 @@ on:
     paths:
       - 'admin-ui/**'
       - '.github/scripts/deploy-qamanager-worker.mjs'
+      - '.github/scripts/test-deploy-qamanager-worker.mjs'
+      - '.github/scripts/mock-cloudflare-deploy-fetch.mjs'
       - '.github/workflows/build-cloudflare-worker.yml'
   push:
     branches: [main, 'fix/master-audit-p0-p1-20261121']
     paths:
       - 'admin-ui/**'
       - '.github/scripts/deploy-qamanager-worker.mjs'
+      - '.github/scripts/test-deploy-qamanager-worker.mjs'
+      - '.github/scripts/mock-cloudflare-deploy-fetch.mjs'
       - '.github/workflows/build-cloudflare-worker.yml'
   workflow_dispatch:
 permissions:
