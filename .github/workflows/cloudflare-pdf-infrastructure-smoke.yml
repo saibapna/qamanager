@@ -1,0 +1,31 @@
+name: Cloudflare PDF infrastructure smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cloudflare-pdf-infrastructure-smoke.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Browser Run binding, database and private PDF authorization
+        run: |
+          set -euo pipefail
+          base='https://qamanager.saipulbahri-it.workers.dev'
+          status="$(curl -sS --max-time 30 -o /tmp/status.json -w '%{http_code}' "$base/api/status")"
+          echo "Status HTTP $status"
+          test "$status" = 200
+          jq -e '.pdf == "browser-run" and .pdf_storage == "supabase_private_bytea"' /tmp/status.json
+          health="$(curl -sS --max-time 30 -o /tmp/health.json -w '%{http_code}' "$base/api/health")"
+          echo "Health HTTP $health"
+          test "$health" = 200
+          jq -e '.ok == true and .database == "connected"' /tmp/health.json
+          for route in '/api/sesi/3/pdf' '/api/templates/3/fixtures' '/api/templates/3/validate' '/api/templates/3/diff' '/api/sesi/3/outputs/1/download'; do
+            code="$(curl -sS --max-time 30 -o /tmp/body.json -w '%{http_code}' -X POST "$base$route")"
+            echo "$route anonymous HTTP $code"
+            test "$code" = 401
+          done
+          echo "Cloudflare PDF infrastructure and access controls: PASS"
