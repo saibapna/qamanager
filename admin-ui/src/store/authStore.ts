@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export type Role = 'ADMIN' | 'TESTER' | 'WITNESS' | 'APPROVER' | 'AUDITOR';
 export interface UserProject { project_id: number; kode: string; nama: string; role: Role; }
-export interface User { id: number; email: string; nama: string; projects: UserProject[]; }
+export interface User { id: number; email: string; nama: string; is_platform_admin?: boolean; projects: UserProject[]; }
 
 interface AuthState {
   accessToken: string | null;
