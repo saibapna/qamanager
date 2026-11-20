@@ -41,7 +41,7 @@ async function passVerify(hash,password){
     return false;
   }
 }
-const jwt=async(c,person,kind)=>sign({sub:String(person.id),kind,iat:time(),exp:time()+(kind==='access'?900:604800),...(kind==='refresh'?{jti:crypto.randomUUID()}:{})},kind==='access'?c.env.JWT_ACCESS_SECRET:c.env.JWT_REFRESH_SECRET,'HS256');
+const jwt=async(c,person,kind,sessionId)=>sign({sub:String(person.id),kind,iat:time(),exp:time()+(kind==='access'?900:604800),...(kind==='refresh'?{jti:crypto.randomUUID()}:{sid:String(sessionId)})},kind==='access'?c.env.JWT_ACCESS_SECRET:c.env.JWT_REFRESH_SECRET,'HS256');
 const members=async(c,uid)=>(await q(c,`SELECT pm.project_id,p.kode,p.nama,pm.role FROM project_members pm JOIN projects p ON p.id=pm.project_id WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[uid])).rows;
 const audit=async(c,action,kind,entity,meta={})=>q(c,`INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES($1,$2,$3,$4,$5,$6)`,[c.get('pid')||null,c.get('uid'),action,kind,entity,JSON.stringify(meta)]);
 const lookups={
@@ -81,6 +81,10 @@ app.use('/api/*',async(c,next)=>{
   c.header('X-Content-Type-Options','nosniff');c.header('Cache-Control','no-store');
   c.header('Referrer-Policy','no-referrer');
   if(['POST','PUT','PATCH','DELETE'].includes(c.req.method)){
+    // Cookie-authenticated mutations require an explicit JavaScript request header.
+    // Combined with Strict SameSite cookies and origin checks, this blocks CSRF forms.
+    const usingCookie=String(c.req.header('cookie')||'').includes('qa_access=');
+    if(usingCookie&&!String(c.req.header('authorization')||'').startsWith('Bearer ')&&c.req.header('x-requested-with')!=='XMLHttpRequest')fail(403,'Permintaan tanpa CSRF guard ditolak');
     const origin=c.req.header('origin');
     if(origin){
       let same=false;try{same=new URL(origin).origin===new URL(c.req.url).origin;}catch{}
@@ -123,9 +127,9 @@ app.post('/api/auth/login',async c=>{
   }
   await q(c,'DELETE FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
   const refreshToken=await jwt(c,user,'refresh');
-  await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[user.id,await sha(refreshToken),time()+604800]);
+  const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[user.id,await sha(refreshToken),time()+604800]);
   await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
-  const accessToken=await jwt(c,user,'access');setAuthCookies(c,accessToken,refreshToken);
+  const accessToken=await jwt(c,user,'access',session.id);setAuthCookies(c,accessToken,refreshToken);
   return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
 });
 app.post('/api/auth/refresh',async c=>{
@@ -136,8 +140,9 @@ app.post('/api/auth/refresh',async c=>{
     const update=await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2 AND revoked=FALSE AND expires_at>now() RETURNING id',[uid,await sha(incoming)]);
     if(!update.rowCount)fail(401,'Refresh token tidak berlaku');
     const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1 AND aktif=TRUE',[uid]);if(!u)fail(401,'Akun nonaktif');
-    const refreshToken=await jwt(c,u,'refresh');await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[uid,await sha(refreshToken),time()+604800]);
-    await q(c,'COMMIT');const accessToken=await jwt(c,u,'access');setAuthCookies(c,accessToken,refreshToken);return c.json({user:{...u,projects:await members(c,uid)}});
+    const refreshToken=await jwt(c,u,'refresh');
+    const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[uid,await sha(refreshToken),time()+604800]);
+    await q(c,'COMMIT');const accessToken=await jwt(c,u,'access',session.id);setAuthCookies(c,accessToken,refreshToken);return c.json({user:{...u,projects:await members(c,uid)}});
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.use('/api/*',async(c,next)=>{
@@ -145,12 +150,20 @@ app.use('/api/*',async(c,next)=>{
   const h=c.req.header('authorization')||'';const incoming=h.startsWith('Bearer ')?h.slice(7):getCookie(c,'qa_access');if(!incoming)fail(401,'Unauthorized');let claims;
   try{claims=await verify(incoming,c.env.JWT_ACCESS_SECRET,'HS256');}catch{fail(401,'Token tidak valid');}
   if(claims.kind!=='access')fail(401,'Jenis token tidak valid');
-  const uid=id(claims.sub);if(!await first(c,'SELECT id FROM users WHERE id=$1 AND aktif=TRUE',[uid]))fail(401,'Akun tidak aktif');
-  c.set('uid',uid);return next();
+  const uid=id(claims.sub);
+  // Every bearer/cookie access token must belong to a live, non-revoked server session.
+  // Legacy tokens without sid require re-login once after this security upgrade.
+  const sid=claims.sid&&/^[1-9]\d*$/.test(String(claims.sid))?id(claims.sid):null;
+  if(!sid)fail(401,'Sesi perlu diperbarui: silakan login ulang');
+  const active=await first(c,'SELECT id FROM refresh_tokens WHERE id=$1 AND user_id=$2 AND revoked=FALSE AND expires_at>now()',[sid,uid]);
+  if(!active||!await first(c,'SELECT id FROM users WHERE id=$1 AND aktif=TRUE',[uid]))fail(401,'Sesi tidak berlaku');
+  c.set('uid',uid);c.set('sid',sid);return next();
 });
 app.get('/api/auth/me',async c=>{const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1',[c.get('uid')]);return c.json({...u,projects:await members(c,u.id)});});
 app.post('/api/auth/logout',async c=>{
   const d=await json(c),token=d?.refreshToken||getCookie(c,'qa_refresh');
+  // Revoke the access token's backing session immediately, even without refresh cookie.
+  await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE id=$1 AND user_id=$2',[c.get('sid'),c.get('uid')]);
   if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
   clearAuthCookies(c);c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
   return c.json({ok:true});

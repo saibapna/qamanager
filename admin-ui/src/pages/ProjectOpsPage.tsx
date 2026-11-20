@@ -19,9 +19,12 @@ export function ProjectOpsPage(){
   const qc=useQueryClient(),toast=useToast();
   const admin=useAuth(s=>s.hasRole(pid,'ADMIN'));
   const reader=useAuth(s=>s.hasRole(pid,'ADMIN','AUDITOR'));
+  const canEditPeople=useAuth(s=>s.hasRole(pid,'ADMIN','TESTER'));
   const [section,setSection]=useState<'dashboard'|'members'|'people'|'plan'|'audit'>('dashboard');
   const [member,setMember]=useState<{nama:string;email:string;password:string;role:Role}>({nama:'',email:'',password:'',role:'TESTER'});
   const [person,setPerson]=useState({kind:'PENGUJI' as 'PENGUJI'|'SAKSI',nama:'',jabatan:'',email:'',telepon:'',nip:''});
+  const [editingPerson,setEditingPerson]=useState<number|null>(null);
+  const [planSearch,setPlanSearch]=useState('');
   const [planJson,setPlanJson]=useState('');
   const [offset,setOffset]=useState(0);
   const {data:dashboard}=useQuery({queryKey:['project-dashboard',pid],queryFn:()=>api.get<Dashboard>('/projects/'+pid+'/dashboard').then(r=>r.data)});
@@ -40,8 +43,18 @@ export function ProjectOpsPage(){
     onError:(e:Error)=>toast.push('error',e.message)
   });
   const addPerson=useMutation({
-    mutationFn:()=>api.post('/projects/'+pid+'/people',person),
-    onSuccess:()=>{qc.invalidateQueries({queryKey:['people',pid]});toast.push('success','Penguji/saksi disimpan');setPerson({kind:'PENGUJI',nama:'',jabatan:'',email:'',telepon:'',nip:''});},
+    mutationFn:()=>editingPerson!==null?api.patch('/projects/'+pid+'/people/'+editingPerson,person):api.post('/projects/'+pid+'/people',person),
+    onSuccess:()=>{qc.invalidateQueries({queryKey:['people',pid]});toast.push('success','Penguji/saksi disimpan');setPerson({kind:'PENGUJI',nama:'',jabatan:'',email:'',telepon:'',nip:''});setEditingPerson(null);},
+    onError:(e:Error)=>toast.push('error',e.message)
+  });
+  const changeMemberRole=useMutation({
+    mutationFn:({m,role}:{m:Member;role:Role})=>api.post('/projects/'+pid+'/members',{email:m.email,nama:m.nama,role}),
+    onSuccess:()=>{qc.invalidateQueries({queryKey:['members',pid]});toast.push('success','Role anggota diperbarui')},
+    onError:(e:Error)=>toast.push('error',e.message)
+  });
+  const togglePerson=useMutation({
+    mutationFn:(p:Person)=>api.patch('/projects/'+pid+'/people/'+p.id,{aktif:!p.aktif}),
+    onSuccess:()=>qc.invalidateQueries({queryKey:['people',pid]}),
     onError:(e:Error)=>toast.push('error',e.message)
   });
   const savePlan=useMutation({
@@ -75,7 +88,11 @@ export function ProjectOpsPage(){
       <div className="overflow-x-auto"><table className="w-full text-sm">
         <thead><tr className="border-b text-left"><th>Nama</th><th>Email</th><th>Role</th><th>Aksi</th></tr></thead>
         <tbody>{members.map(m=><tr className="border-b" key={m.id}><td className="p-2">{m.nama}</td><td className="p-2">{m.email}</td><td className="p-2">{m.role}</td><td className="p-2">
-          {admin&&<button className="text-red-700 underline" onClick={()=>{if(window.confirm('Cabut akses '+m.email+'?'))removeMember.mutate(m.id)}}>Cabut</button>}
+          {admin&&<div className="flex items-center gap-2"><select className="rounded border p-1 text-xs" aria-label={'Ubah role '+m.email}
+            value={m.role} disabled={changeMemberRole.isPending}
+            onChange={e=>{const next=e.target.value as Role;if(window.confirm('Ubah role '+m.email+' menjadi '+next+'?'))changeMemberRole.mutate({m,role:next})}}>
+            {roleOptions.map(r=><option key={r}>{r}</option>)}
+          </select><button className="text-red-700 underline" onClick={()=>{if(window.confirm('Cabut akses '+m.email+'?'))removeMember.mutate(m.id)}}>Cabut</button></div>}
         </td></tr>)}</tbody></table></div>
       {admin&&<form onSubmit={e=>{e.preventDefault();addMember.mutate()}} className="grid md:grid-cols-2 gap-3">
         <label className="text-sm">Nama<input aria-label="Nama anggota" required value={member.nama} onChange={e=>setMember({...member,nama:e.target.value})} className={input}/></label>
@@ -87,20 +104,26 @@ export function ProjectOpsPage(){
     </section>}
     {section==='people'&&<section className="rounded-xl bg-white border p-5 space-y-4">
       <h2 className="font-semibold">Master Penguji dan Saksi</h2>
-      <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th>Jenis</th><th>Nama</th><th>Jabatan</th><th>Email</th></tr></thead>
-        <tbody>{people.map(p=><tr key={p.id} className="border-b"><td className="p-2">{p.kind}</td><td className="p-2">{p.nama}</td><td className="p-2">{p.jabatan||'—'}</td><td className="p-2">{p.email||'—'}</td></tr>)}</tbody></table></div>
-      {useAuth.getState().hasRole(pid,'ADMIN','TESTER')&&<form onSubmit={e=>{e.preventDefault();addPerson.mutate()}} className="grid gap-3 md:grid-cols-3">
+      <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th>Jenis</th><th>Nama</th><th>Jabatan</th><th>Email</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody>{people.map(p=><tr key={p.id} className="border-b"><td className="p-2">{p.kind}</td><td className="p-2">{p.nama}</td><td className="p-2">{p.jabatan||'--'}</td><td className="p-2">{p.email||'--'}</td><td className="p-2">{p.aktif?'Aktif':'Nonaktif'}</td><td className="p-2 whitespace-nowrap">
+          {canEditPeople&&<><button className="text-blue-700 underline mr-2" onClick={()=>{setEditingPerson(p.id);setPerson({kind:p.kind,nama:p.nama,jabatan:p.jabatan||'',email:p.email||'',telepon:p.telepon||'',nip:p.nip||''})}}>Edit</button>
+          <button className="text-red-700 underline" onClick={()=>{if(window.confirm((p.aktif?'Nonaktifkan':'Aktifkan')+' '+p.nama+'?'))togglePerson.mutate(p)}}>{p.aktif?'Nonaktifkan':'Aktifkan'}</button></>}</td></tr>)}</tbody></table></div>
+      {canEditPeople&&<form onSubmit={e=>{e.preventDefault();addPerson.mutate()}} className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Jenis<select className={input} value={person.kind} onChange={e=>setPerson({...person,kind:e.target.value as 'PENGUJI'|'SAKSI'})}><option>PENGUJI</option><option>SAKSI</option></select></label>
         {(['nama','jabatan','email','telepon','nip'] as const).map(k=><label className="text-sm" key={k}>{k}<input className={input} required={k==='nama'} value={person[k]} onChange={e=>setPerson({...person,[k]:e.target.value})}/></label>)}
-        <button className={btn} disabled={addPerson.isPending}>Simpan penguji/saksi</button>
+        <button className={btn} disabled={addPerson.isPending}>{editingPerson!==null?'Simpan perubahan':'Tambah penguji/saksi'}</button>
+        {editingPerson!==null&&<button type="button" className="rounded border p-2 text-sm" onClick={()=>{setEditingPerson(null);setPerson({kind:'PENGUJI',nama:'',jabatan:'',email:'',telepon:'',nip:''})}}>Batal edit</button>}
       </form>}
     </section>}
     {section==='plan'&&<section className="rounded-xl bg-white border p-5 space-y-4">
       <h2 className="font-semibold">Test Plan Kanonis ({plan.length} item)</h2>
       <p className="text-sm text-slate-600">Test plan terkunci setelah project memiliki sesi UAT. Saat sesi baru dibuat, semua item akan disalin dan tidak boleh dihapus atau diubah identitasnya.</p>
+      <label className="block text-sm">Cari test case<input value={planSearch} onChange={e=>setPlanSearch(e.target.value)}
+        className={input} placeholder="Nomor, kategori, kebutuhan"/></label>
       <div className="max-h-96 overflow-auto border rounded"><table className="w-full text-sm"><thead className="sticky top-0 bg-white"><tr className="border-b"><th>No</th><th>Kategori</th><th>Kebutuhan</th><th>Urutan</th><th>Gate</th></tr></thead>
-        <tbody>{plan.map(t=><tr key={t.no} className="border-b"><td className="p-2">{t.no}</td><td className="p-2">{t.kategori}</td><td className="p-2">{t.kebutuhan}</td><td className="p-2">{t.urutan}</td><td className="p-2">{t.gate_required?'Wajib':'—'}</td></tr>)}</tbody></table></div>
-      {admin&&plan.length===0&&<div><label className="block text-sm mb-2">Tempel JSON array item: no, kategori, kebutuhan, urutan dan gate_required</label>
+        <tbody>{plan.filter(t=>[t.no,t.kategori,t.kebutuhan].some(v=>v.toLowerCase().includes(planSearch.toLowerCase()))).map(t=><tr key={t.no} className="border-b"><td className="p-2">{t.no}</td><td className="p-2">{t.kategori}</td><td className="p-2">{t.kebutuhan}</td><td className="p-2">{t.urutan}</td><td className="p-2">{t.gate_required?'Wajib':'—'}</td></tr>)}</tbody></table></div>
+      {admin&&(dashboard?.sessions.total||0)===0&&<div><label className="block text-sm mb-2">Tempel JSON array item: no, kategori, kebutuhan, urutan dan gate_required</label>
+        <button type="button" className="rounded border px-3 py-2 mb-2 text-sm" onClick={()=>setPlanJson(JSON.stringify(plan,null,2))}>Muat test plan ke editor</button>
         <textarea className={input} rows={7} value={planJson} onChange={e=>setPlanJson(e.target.value)} placeholder='[{"no":"A1","kategori":"A","kebutuhan":"Login","urutan":1,"gate_required":false}]'/>
         <button className={btn} disabled={!planJson||savePlan.isPending} onClick={()=>savePlan.mutate()}>Simpan test plan</button>
       </div>}

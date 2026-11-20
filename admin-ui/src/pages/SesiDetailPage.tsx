@@ -14,6 +14,8 @@ export function SesiDetailPage() {
   const toast = useToast();
   const [search,setSearch] = useState('');
   const [statusFilter,setStatusFilter] = useState('ALL');
+  const [page,setPage] = useState(1);
+  const pageSize=20;
   const user = useAuth(s=>s.user);
   const { data: sesi, isLoading, refetch } = useQuery({ queryKey: ['sesi', sid], queryFn: () => sesiApi.get(sid) });
   const [items, setItems] = useState<Item[] | null>(null);
@@ -22,6 +24,9 @@ export function SesiDetailPage() {
   const role = user?.projects.find(p=>p.project_id === sesi?.project_id)?.role;
   const canEdit = ['ADMIN','TESTER'].includes(role||'');
   const visibleItems = working.map((it,idx)=>({...it,idx})).filter(it => (statusFilter==='ALL'||it.status===statusFilter) && (!search.trim() || [it.no,it.kebutuhan,it.hasil].some(t=>String(t||'').toLowerCase().includes(search.toLowerCase()))));
+  const totalPages=Math.max(1,Math.ceil(visibleItems.length/pageSize));
+  const safePage=Math.min(page,totalPages);
+  const currentItems=visibleItems.slice((safePage-1)*pageSize,safePage*pageSize);
 
   const saveMut = useMutation({
     mutationFn: () => sesiApi.updateItems(sid, working),
@@ -36,6 +41,7 @@ export function SesiDetailPage() {
   });
 
   const finalizeMut=useMutation({mutationFn:()=>sesiApi.finalize(sid),onSuccess:()=>{toast.push('success','Sesi final');refetch();},onError:(e:Error)=>toast.push('error',e.message)});
+  const reopenMut=useMutation({mutationFn:()=>sesiApi.reopen(sid),onSuccess:()=>{toast.push('success','Sesi kembali menjadi DRAFT; semua keputusan lama tersimpan sebagai riwayat');refetch();},onError:(e:Error)=>toast.push('error',e.message)});
   const downloadOutput = async (outputId: number, versi: number) => {
     try {
       const blob = await sesiApi.downloadOutput(sid, outputId);
@@ -62,13 +68,15 @@ export function SesiDetailPage() {
               <Save size={16} /> Simpan
             </button>
             {sesi.status==='DRAFT'&&['ADMIN','APPROVER'].includes(role||'')&&<button onClick={() => finalizeMut.mutate()} disabled={finalizeMut.isPending || !!items} className="px-3 py-2 text-sm border rounded-lg disabled:opacity-50">Finalisasi</button>}
-            <button onClick={() => pdfMut.mutate()}
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+            {sesi.status==='FINAL'&&role==='ADMIN'&&<button onClick={() => {if(window.confirm('Buka ulang sesi FINAL? Revisi baru wajib difinalisasi dan disetujui ulang.'))reopenMut.mutate()}} disabled={reopenMut.isPending} className="px-3 py-2 text-sm border rounded-lg disabled:opacity-50">Buka Ulang</button>}
+            {canEdit&&<button onClick={() => pdfMut.mutate()} disabled={pdfMut.isPending}
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
               <Download size={16} /> Generate PDF
-            </button>
+            </button>}
           </>
         } />
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      {sesi.status==='FINAL'&&!sesi.finalized_at&&<p role="alert" className="mb-4 rounded border border-amber-400 p-3 text-sm text-amber-900">Sesi FINAL dari versi lama belum lulus pemeriksaan workflow. ADMIN harus buka ulang, lengkapi defect/retest, lalu finalisasi ulang sebelum proses persetujuan.</p>}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[["Total", ringkasan.total], ["Lulus", ringkasan.lulus], ["Gagal", ringkasan.gagal], ["Belum", ringkasan.belum]].map(([l, v]) => (
           <div key={l as string} className="bg-white rounded-xl border p-4">
             <p className="text-xs text-slate-500">{l}</p>
@@ -84,7 +92,7 @@ export function SesiDetailPage() {
         </div>)}
       </div>}
       <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="flex gap-3 flex-wrap p-4"><input className="border p-2 rounded text-sm" aria-label="Cari test case" placeholder="Cari nomor, kebutuhan, hasil" value={search} onChange={e=>setSearch(e.target.value)}/><select className="border p-2 rounded text-sm" aria-label="Filter status" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="ALL">Semua</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BELUM">BELUM</option></select><span className="text-xs text-slate-500 self-center">{visibleItems.length} item</span></div>
+        <div className="flex gap-3 flex-wrap p-4"><input className="border p-2 rounded text-sm" aria-label="Cari test case" placeholder="Cari nomor, kebutuhan, hasil" value={search} onChange={e=>{setSearch(e.target.value);setPage(1)}}/><select className="border p-2 rounded text-sm" aria-label="Filter status" value={statusFilter} onChange={e=>{setStatusFilter(e.target.value);setPage(1)}}><option value="ALL">Semua</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BELUM">BELUM</option></select><span className="text-xs text-slate-500 self-center">{visibleItems.length} item</span></div>
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
@@ -96,7 +104,7 @@ export function SesiDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {visibleItems.map((it) => (
+            {currentItems.map((it) => (
               <tr key={it.id??it.no} className="border-t">
                 <td className="px-3 py-2"><span className="font-mono text-xs">{it.no}</span></td>
                 <td className="px-3 py-2"><span className="text-xs">{it.kategori}</span></td>
@@ -112,6 +120,10 @@ export function SesiDetailPage() {
           </tbody>
         </table></div>
       </div>
+      <nav aria-label="Navigasi halaman test case" className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border bg-white p-3 text-sm mb-4">
+        <span>Halaman {safePage} dari {totalPages} ({visibleItems.length} item)</span>
+        <div className="flex gap-2"><button type="button" className="rounded border px-3 py-2 disabled:opacity-40" disabled={safePage<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>Sebelumnya</button><button type="button" className="rounded border px-3 py-2 disabled:opacity-40" disabled={safePage>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Berikutnya</button></div>
+      </nav>
       <UatWorkflowPanel sessionId={sid} projectId={sesi.project_id} status={sesi.status} items={sesi.items||[]}/>
     </>
   );

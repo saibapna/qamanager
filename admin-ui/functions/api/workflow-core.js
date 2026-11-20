@@ -74,3 +74,13 @@ export function assertPositiveId(x) {
   if(!Number.isSafeInteger(v)||v<=0)throw new Error('ID tidak valid');
   return v;
 }
+
+/** An old or altered FINAL session must never be signed without a fresh validation. */
+export function checkApprovalState(session, items, catalog, options = {}) {
+  if (session?.status !== 'FINAL') return {ok:false,reason:'Sesi harus FINAL'};
+  if (!session.finalized_at) return {ok:false,reason:'Sesi FINAL lama belum diverifikasi'};
+  if (!Number.isSafeInteger(Number(session.revision)) || Number(session.revision) < 1) {
+    return {ok:false,reason:'Revisi approval tidak valid'};
+  }
+  return checkFinalization(items, catalog, options);
+}

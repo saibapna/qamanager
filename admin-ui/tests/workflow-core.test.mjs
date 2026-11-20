@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
-import { assertCanonicalItems, checkFinalization, hashCloudflarePassword } from '../functions/api/workflow-core.js';
+import { assertCanonicalItems, checkFinalization, checkApprovalState, hashCloudflarePassword } from '../functions/api/workflow-core.js';
 
 const plan=[
   {no:'A1',kategori:'A',kebutuhan:'Login',urutan:1},
@@ -45,4 +45,14 @@ test('bcrypt tidak digunakan untuk Cloudflare: hash PBKDF2 fixed 100k + salt uni
   const real=pbkdf2Sync(password,Buffer.from(salt,'base64url'),100000,32,'sha256');
   assert.equal(timingSafeEqual(real,Buffer.from(expected,'base64url')),true);
   assert.throws(()=>hashCloudflarePassword('short'),/16/);
+});
+
+test('approval: legacy FINAL tanpa finalized_at tetap ditolak',()=>{
+  const opts={requireGateX:false};
+  assert.equal(checkApprovalState({status:'FINAL',revision:1,finalized_at:null},items,plan,opts).ok,false);
+  assert.equal(checkApprovalState({status:'DRAFT',revision:1,finalized_at:'2026-11-21'},items,plan,opts).ok,false);
+  assert.equal(checkApprovalState({status:'FINAL',revision:0,finalized_at:'2026-11-21'},items,plan,opts).ok,false);
+  assert.equal(checkApprovalState({status:'FINAL',revision:1,finalized_at:'2026-11-21'},items,plan,opts).ok,true);
+  const altered=items.map((item,i)=>i===0?{...item,status:'FAIL',hasil:'Error'}:item);
+  assert.equal(checkApprovalState({status:'FINAL',revision:1,finalized_at:'2026-11-21'},altered,plan,opts).ok,false);
 });
