@@ -18,7 +18,7 @@ export function LoginPage() {
     e.preventDefault();
     setError(null); setLoading(true);
     try {
-      const { data } = await axios.post('/api/auth/login', { email: email.trim(), password });
+      const { data } = await axios.post('/api/auth/login', { email: email.trim(), password }, { withCredentials: true, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
       setSession(data); nav('/projects');
     } catch (e: any) {
       setError(e.response?.status === 401 ? 'Email atau password tidak cocok. Gunakan password akun QA Manager, bukan password database PostgreSQL.' : (e.response?.data?.error || 'Login gagal. Periksa koneksi API dan coba kembali.'));
