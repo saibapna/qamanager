@@ -453,7 +453,7 @@ paths:
           description: FINAL
         '422':
           description: Gate belum terpenuhi
-/projects/{projectId}/plan:
+  /projects/{projectId}/plan:
     parameters:
     - name: projectId
       in: path
