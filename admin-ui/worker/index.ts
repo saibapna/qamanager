@@ -15,14 +15,20 @@ const mimeMap: Record<string, string> = {
 };
 const assetKey = (path: string): string => path === '/' ? '/index.html' : path;
 function assetResponse(path: string, method: string): Response {
-  const key = assetKey(path);
-  const entry = (assets as Record<string, string>)[key] || (path.startsWith('/assets/') ? undefined : assets['/index.html']);
-  if (entry === undefined) return new Response('Not found', { status: 404 });
-  const ext = key.slice(key.lastIndexOf('.') + 1);
+  const requestedKey = assetKey(path);
+  const assetFiles = assets as Record<string, string>;
+  const servedKey = assetFiles[requestedKey] !== undefined
+    ? requestedKey
+    : (path.startsWith('/assets/') ? undefined : '/index.html');
+  if (servedKey === undefined || assetFiles[servedKey] === undefined) {
+    return new Response('Not found', { status: 404 });
+  }
+  const entry = assetFiles[servedKey];
+  const ext = servedKey.slice(servedKey.lastIndexOf('.') + 1);
   const headers = new Headers({
     'Content-Type': mimeMap[ext] || 'application/octet-stream',
     'X-Content-Type-Options': 'nosniff',
-    'Cache-Control': key.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store',
+    'Cache-Control': servedKey.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store',
   });
   if (method === 'HEAD') return new Response(null, { headers });
   const bytes = Uint8Array.from(atob(entry), ch => ch.charCodeAt(0));
