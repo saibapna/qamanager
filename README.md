@@ -44,7 +44,7 @@ Database hanya diakses lewat server Express (library `pg`), bukan Supabase JS da
 
 ## Cloudflare Hono (target deployment)
 
-Backend untuk Cloudflare menggunakan **Hono** (`admin-ui/functions/api/[[path]].js`) dan `pg` via Cloudflare Hyperdrive, bukan Express yang membutuhkan Node.js server. `admin-ui/worker/index.ts` melayani React SPA dan meneruskan `/api/*` ke Hono; build bundle dengan `cd admin-ui && npm install && npm run build && npm run build:worker`. Lihat `admin-ui/README-cloudflare.md` untuk konfigurasi nodejs_compat, secrets, dan keterbatasan fitur. PDF Chromium/Python masih hanya dapat dijalankan di backend eksternal, **tidak aktif pada Worker**. Integrasi Cloudflare dan build belum dinyatakan siap produksi hingga lulus smoke-test.
+Cloudflare menggunakan **Hono + React** (`admin-ui/functions/api/[[path]].js`, `admin-ui/worker/index.ts`), PostgreSQL lewat Hyperdrive, dan Cloudflare Browser Run untuk membuat PDF. Fitur workflow UAT tersedia pada `admin-ui/functions/api/workflow-routes.js`: test plan kanonis, RBAC, evidence, defect, retest, dan persetujuan internal. File PDF/fixture disimpan privat di Supabase sementara menunggu storage objek. Validasi PDF **baru SHA-256 byte identik, belum SSIM/pixel-perfect**. **Status tetap staging, bukan produksi yang telah disertifikasi**. Lihat [panduan deployment](admin-ui/README-cloudflare.md) dan [master issue #4](https://github.com/saibapna/qamanager/issues/4) untuk verifikasi serta gap yang masih terbuka.
 
 ## Pengujian
 
@@ -56,6 +56,10 @@ npm run build           # PDF demo lengkap 71 item
 ```
 
 Tes regresi memeriksa 71 item per project, tidak ada item ganda/hilang dalam page-map, serta role access berdasarkan pemilik resource. Validasi PDF piksel menggunakan `fixtures/lampiran.pdf` yang **tidak termasuk dalam repository**. Jumlah halaman fisik output harus diukur di lingkungan Chromium dan dibandingkan dengan fixture resmi; page-map hanya menjamin alokasi data, **bukan** identitas visual.
+
+## Catatan autentikasi Cloudflare
+
+Aplikasi Cloudflare memakai cookie HttpOnly/Secure/SameSite=Strict dan hash PBKDF2 100.000 iterasi yang kompatibel dengan Workerd. Skrip bootstrap lama berbasis Express/Argon2 **hanya untuk backend legacy/lokal**, bukan untuk menyiapkan akun login Cloudflare. Jangan menjalankan ulang bootstrap SQL pada database staging yang sudah berisi data.
 
 ## Keamanan & keterbatasan
 
