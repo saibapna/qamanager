@@ -363,7 +363,27 @@ app.post('/api/aplikasi/:aplikasiId/sesi',async c=>{
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.get('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),s=await first(c,'SELECT * FROM ulo_sesi WHERE id=$1',[sid]);const items=(await q(c,'SELECT * FROM ulo_item WHERE sesi_id=$1 ORDER BY urutan',[sid])).rows;return c.json({...s,items,ringkasan:{total:items.length,lulus:items.filter(i=>i.status==='PASS').length,gagal:items.filter(i=>i.status==='FAIL').length,belum:items.filter(i=>i.status==='BELUM').length}});});
-app.patch('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId',canEdit);const d=await json(c),sid=id(c.req.param('sesiId')),allowed=['hari','tanggal','pukul','tempat','jenis','penguji_nama','penguji_jabatan','penguji_email','penguji_telp','penguji_nip','saksi_nama','saksi_jabatan','saksi_email','saksi_telp','catatan','temuan'],keys=allowed.filter(k=>d?.[k]!==undefined);if(!keys.length)fail(400,'Tidak ada perubahan');const vals=[...keys.map(k=>d[k]),sid],s=await first(c,`UPDATE ulo_sesi SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${vals.length} AND status='DRAFT' RETURNING *`,vals);if(!s)fail(409,'Sesi tidak dapat diubah setelah FINAL');await audit(c,'SESI_UPDATED','sesi',sid);await publishLive(c,'SESI_UPDATED',sid,Number(s.revision));return c.json(s);});
+app.patch('/api/sesi/:sesiId',async c=>{
+  const pid=await guard(c,'sesiId',canEdit),d=await json(c),sid=id(c.req.param('sesiId'));
+  const allowed=['hari','tanggal','pukul','tempat','jenis','penguji_nama','penguji_jabatan','penguji_email','penguji_telp','penguji_nip','saksi_nama','saksi_jabatan','saksi_email','saksi_telp','catatan','temuan'];
+  const keys=allowed.filter(k=>d?.[k]!==undefined);
+  if(!keys.length)fail(400,'Tidak ada perubahan');
+  const expected=d?.expected_revision;
+  if(!Number.isSafeInteger(expected)||expected<1)fail(428,'expected_revision wajib');
+  const record=await atomic(c,async()=>{
+    const old=await first(c,'SELECT status,revision FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+    if(old?.status!=='DRAFT')fail(409,'Sesi tidak dapat diubah setelah FINAL');
+    if(Number(old.revision)!==expected)fail(409,'Data sesi telah diubah pengguna lain. Muat ulang sebelum menyimpan.');
+    const vals=[...keys.map(k=>d[k]),sid];
+    const setters=keys.map((k,i)=>k+'=$'+(i+1)).join(',');
+    const updated=await first(c,'UPDATE ulo_sesi SET '+setters+',revision=revision+1 WHERE id=$'+vals.length+' AND status=\'DRAFT\' RETURNING *',vals);
+    if(!updated)fail(409,'Sesi berubah saat diperbarui');
+    c.set('pid',pid);await audit(c,'SESI_UPDATED','sesi',sid,{revision:Number(updated.revision),fields:keys});
+    return updated;
+  });
+  await publishLive(c,'SESI_UPDATED',sid,Number(record.revision));
+  return c.json(record);
+});
 app.put('/api/sesi/:sesiId/items',async c=>{
   const pid=await guard(c,'sesiId',canEdit),sid=id(c.req.param('sesiId')),d=await json(c),items=d?.items;
   const expected=d?.expected_revision;
