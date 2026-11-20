@@ -6,7 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
-import { assertCanonicalItems, checkFinalization } from './workflow-core.js';
+import { assertCanonicalItems, checkFinalization, runAtomic } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
@@ -18,6 +18,7 @@ class ApiError extends Error{constructor(status,message){super(message);this.sta
 const fail=(status,msg)=>{throw new ApiError(status,msg);};
 const id=x=>{if(!/^[1-9]\d*$/.test(String(x))||!Number.isSafeInteger(Number(x)))fail(400,'ID tidak valid');return Number(x);};
 const q=(c,s,p=[])=>c.get('db').query(s,p);
+const atomic=(c,work)=>runAtomic(sql=>q(c,sql),work);
 const first=async(c,s,p)=>(await q(c,s,p)).rows[0];
 const json=async c=>{if(Number(c.req.header('content-length')||0)>1024*1024)fail(413,'Payload terlalu besar');return await c.req.json().catch(()=>fail(400,'JSON tidak valid'));};
 const sha=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)))).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -125,12 +126,17 @@ app.post('/api/auth/login',async c=>{
     await q(c,"INSERT INTO auth_attempts(key_hash,attempts,window_started_at,updated_at) VALUES($1,1,now(),now()) ON CONFLICT(key_hash) DO UPDATE SET attempts=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN 1 ELSE auth_attempts.attempts+1 END,window_started_at=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN now() ELSE auth_attempts.window_started_at END,updated_at=now()",[attemptKey]);
     fail(401,'Kredensial salah');
   }
-  await q(c,'DELETE FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
+  const projects=await members(c,user.id);
   const refreshToken=await jwt(c,user,'refresh');
-  const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[user.id,await sha(refreshToken),time()+604800]);
-  await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
+  const refreshHash=await sha(refreshToken);
+  const session=await atomic(c,async()=>{
+    await q(c,'DELETE FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
+    const created=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[user.id,refreshHash,time()+604800]);
+    await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
+    return created;
+  });
   const accessToken=await jwt(c,user,'access',session.id);setAuthCookies(c,accessToken,refreshToken);
-  return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
+  return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects}});
 });
 app.post('/api/auth/refresh',async c=>{
   const d=await json(c);const incoming=d?.refreshToken||getCookie(c,'qa_refresh');let tok;
@@ -142,6 +148,7 @@ app.post('/api/auth/refresh',async c=>{
     const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1 AND aktif=TRUE',[uid]);if(!u)fail(401,'Akun nonaktif');
     const refreshToken=await jwt(c,u,'refresh');
     const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[uid,await sha(refreshToken),time()+604800]);
+    await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_REFRESH','user',$1,'{}'::jsonb)",[uid]);
     await q(c,'COMMIT');const accessToken=await jwt(c,u,'access',session.id);setAuthCookies(c,accessToken,refreshToken);return c.json({user:{...u,projects:await members(c,uid)}});
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
@@ -162,10 +169,13 @@ app.use('/api/*',async(c,next)=>{
 app.get('/api/auth/me',async c=>{const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1',[c.get('uid')]);return c.json({...u,projects:await members(c,u.id)});});
 app.post('/api/auth/logout',async c=>{
   const d=await json(c),token=d?.refreshToken||getCookie(c,'qa_refresh');
-  // Revoke the access token's backing session immediately, even without refresh cookie.
-  await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE id=$1 AND user_id=$2',[c.get('sid'),c.get('uid')]);
-  if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
-  clearAuthCookies(c);c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
+  // Audit and token revocation commit together; only then clear the cookies.
+  await atomic(c,async()=>{
+    await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE id=$1 AND user_id=$2',[c.get('sid'),c.get('uid')]);
+    if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
+    c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
+  });
+  clearAuthCookies(c);
   return c.json({ok:true});
 });
 // Session-cookie authenticated WebSocket; existing access-session validation ran above.
@@ -232,16 +242,106 @@ const publishLive=async(c,action,sessionId,revision,targetUserId)=>{
 app.get('/api/projects',async c=>c.json((await q(c,`SELECT p.* FROM projects p JOIN project_members pm ON pm.project_id=p.id WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[c.get('uid')])).rows));
 app.post('/api/projects',async c=>{if(!await first(c,'SELECT id FROM users WHERE id=$1 AND is_platform_admin=TRUE AND aktif=TRUE',[c.get('uid')]))fail(403,'Hanya platform admin dapat membuat project');const d=await json(c);if(![d?.kode,d?.nama,d?.instansi].every(isStr))fail(400,'Kode, nama, instansi wajib');await q(c,'BEGIN');try{const p=await first(c,'INSERT INTO projects(kode,nama,instansi,bidang) VALUES($1,$2,$3,$4) RETURNING *',[d.kode.trim().toUpperCase(),d.nama.trim(),d.instansi.trim(),d.bidang||null]);await q(c,"INSERT INTO project_members(user_id,project_id,role) VALUES($1,$2,'ADMIN')",[c.get('uid'),p.id]);c.set('pid',p.id);await audit(c,'PROJECT_CREATED','project',p.id);await q(c,'COMMIT');await publishLive(c,'PROJECT_CREATED');return c.json(p,201);}catch(e){await q(c,'ROLLBACK');throw e;}});
 app.get('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId');return c.json(await first(c,'SELECT * FROM projects WHERE id=$1',[pid]));});
-app.patch('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId',['ADMIN']),d=await json(c),keys=['nama','instansi','bidang'].filter(k=>d?.[k]!==undefined);if(!keys.length)fail(400,'Tidak ada perubahan');if(keys.some(k=>k!=='bidang'&&!isStr(d[k])))fail(400,'Field wajib');const args=[...keys.map(k=>d[k]),pid];const p=await first(c,`UPDATE projects SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${args.length} RETURNING *`,args);await audit(c,'PROJECT_UPDATED','project',pid);await publishLive(c,'PROJECT_UPDATED');return c.json(p);});
-app.delete('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId',['ADMIN']);await q(c,'UPDATE projects SET aktif=FALSE WHERE id=$1',[pid]);await audit(c,'PROJECT_ARCHIVED','project',pid);await publishLive(c,'PROJECT_ARCHIVED');return c.body(null,204);});
+app.patch('/api/projects/:projectId',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']),d=await json(c),keys=['nama','instansi','bidang'].filter(k=>d?.[k]!==undefined);
+  if(!keys.length)fail(400,'Tidak ada perubahan');
+  if(keys.some(k=>k!=='bidang'&&!isStr(d[k])))fail(400,'Field wajib');
+  const args=[...keys.map(k=>d[k]),pid];
+  const p=await atomic(c,async()=>{
+    const updated=await first(c,'UPDATE projects SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+args.length+' RETURNING *',args);
+    if(!updated)fail(404,'Project tidak ditemukan');
+    await audit(c,'PROJECT_UPDATED','project',pid);
+    return updated;
+  });
+  await publishLive(c,'PROJECT_UPDATED');
+  return c.json(p);
+});
+app.delete('/api/projects/:projectId',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']);
+  await atomic(c,async()=>{
+    const p=await first(c,'UPDATE projects SET aktif=FALSE WHERE id=$1 AND aktif=TRUE RETURNING id',[pid]);
+    if(!p)fail(409,'Project sudah diarsipkan');
+    await audit(c,'PROJECT_ARCHIVED','project',pid);
+  });
+  await publishLive(c,'PROJECT_ARCHIVED');
+  return c.body(null,204);
+});
 app.get('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT id,versi,nama,published,checksum,created_at FROM templates WHERE project_id=$1 ORDER BY created_at DESC',[pid])).rows);});
-app.post('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);if(![d?.versi,d?.nama,d?.layout_hbs].every(isStr)||!d?.kategori_map||!d?.page_map)fail(400,'Template tidak lengkap');const checksum=await sha(d.layout_hbs+JSON.stringify(d.partials||{}));const t=await first(c,'INSERT INTO templates(project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[pid,d.versi,d.nama,d.layout_hbs,JSON.stringify(d.partials||{}),JSON.stringify(d.kategori_map),JSON.stringify(d.page_map),checksum]);await audit(c,'TEMPLATE_CREATED','template',t.id);await publishLive(c,'TEMPLATE_CREATED');return c.json(t,201);});
+app.post('/api/projects/:projectId/templates',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);
+  if(![d?.versi,d?.nama,d?.layout_hbs].every(isStr)||!d?.kategori_map||!d?.page_map)fail(400,'Template tidak lengkap');
+  const checksum=await sha(d.layout_hbs+JSON.stringify(d.partials||{}));
+  const t=await atomic(c,async()=>{
+    const inserted=await first(c,'INSERT INTO templates(project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[pid,d.versi,d.nama,d.layout_hbs,JSON.stringify(d.partials||{}),JSON.stringify(d.kategori_map),JSON.stringify(d.page_map),checksum]);
+    await audit(c,'TEMPLATE_CREATED','template',inserted.id);
+    return inserted;
+  });
+  await publishLive(c,'TEMPLATE_CREATED');
+  return c.json(t,201);
+});
 app.get('/api/templates/:templateId',async c=>{await guard(c,'templateId');return c.json(await first(c,'SELECT * FROM templates WHERE id=$1',[id(c.req.param('templateId'))]));});
-app.patch('/api/templates/:templateId',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId')),old=await first(c,'SELECT * FROM templates WHERE id=$1',[tid]);if(old.published)fail(409,'Template sudah published');const d=await json(c),keys=['nama','layout_hbs','partials','kategori_map','page_map'].filter(k=>d?.[k]!==undefined);if(!keys.length)return c.json(old);const args=keys.map(k=>['partials','kategori_map','page_map'].includes(k)?JSON.stringify(d[k]):d[k]);args.push(await sha((d.layout_hbs??old.layout_hbs)+JSON.stringify(d.partials??old.partials)),tid);const t=await first(c,`UPDATE templates SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')},checksum=$${keys.length+1} WHERE id=$${keys.length+2} AND published=FALSE RETURNING *`,args);await audit(c,'TEMPLATE_UPDATED','template',tid);await publishLive(c,'TEMPLATE_UPDATED');return c.json(t);});
-app.post('/api/templates/:templateId/publish',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId'));const t=await first(c,'UPDATE templates SET published=TRUE WHERE id=$1 AND published=FALSE RETURNING *',[tid]);if(!t)fail(409,'Template sudah published');await audit(c,'TEMPLATE_PUBLISHED','template',tid);await publishLive(c,'TEMPLATE_PUBLISHED');return c.json(t);});
-app.delete('/api/templates/:templateId',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId'));const t=await first(c,'SELECT published FROM templates WHERE id=$1',[tid]);if(t.published)fail(409,'Template published tidak dapat dihapus');await q(c,'DELETE FROM templates WHERE id=$1',[tid]);await audit(c,'TEMPLATE_DELETED','template',tid);await publishLive(c,'TEMPLATE_DELETED');return c.body(null,204);});
+app.patch('/api/templates/:templateId',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId')),d=await json(c);
+  const keys=['nama','layout_hbs','partials','kategori_map','page_map'].filter(k=>d?.[k]!==undefined);
+  if(!keys.length){
+    const old=await first(c,'SELECT * FROM templates WHERE id=$1',[tid]);
+    if(!old)fail(404,'Template tidak ditemukan');
+    return c.json(old);
+  }
+  const t=await atomic(c,async()=>{
+    const old=await first(c,'SELECT * FROM templates WHERE id=$1 FOR UPDATE',[tid]);
+    if(!old)fail(404,'Template tidak ditemukan');
+    if(old.published)fail(409,'Template sudah published');
+    const args=keys.map(k=>['partials','kategori_map','page_map'].includes(k)?JSON.stringify(d[k]):d[k]);
+    args.push(await sha((d.layout_hbs??old.layout_hbs)+JSON.stringify(d.partials??old.partials)),tid);
+    const setters=keys.map((k,i)=>k+'=$'+(i+1)).join(',');
+    const sql='UPDATE templates SET '+setters+',checksum=$'+(keys.length+1)+' WHERE id=$'+(keys.length+2)+' AND published=FALSE RETURNING *';
+    const updated=await first(c,sql,args);
+    if(!updated)fail(409,'Template sudah published');
+    await audit(c,'TEMPLATE_UPDATED','template',tid);
+    return updated;
+  });
+  await publishLive(c,'TEMPLATE_UPDATED');
+  return c.json(t);
+});
+app.post('/api/templates/:templateId/publish',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId'));
+  const t=await atomic(c,async()=>{
+    const updated=await first(c,'UPDATE templates SET published=TRUE WHERE id=$1 AND published=FALSE RETURNING *',[tid]);
+    if(!updated)fail(409,'Template sudah published');
+    await audit(c,'TEMPLATE_PUBLISHED','template',tid);
+    return updated;
+  });
+  await publishLive(c,'TEMPLATE_PUBLISHED');
+  return c.json(t);
+});
+app.delete('/api/templates/:templateId',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId'));
+  await atomic(c,async()=>{
+    const t=await first(c,'SELECT published FROM templates WHERE id=$1 FOR UPDATE',[tid]);
+    if(!t)fail(404,'Template tidak ditemukan');
+    if(t.published)fail(409,'Template published tidak dapat dihapus');
+    await q(c,'DELETE FROM templates WHERE id=$1',[tid]);
+    await audit(c,'TEMPLATE_DELETED','template',tid);
+  });
+  await publishLive(c,'TEMPLATE_DELETED');
+  return c.body(null,204);
+});
 app.get('/api/projects/:projectId/aplikasi',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT * FROM aplikasi WHERE project_id=$1 ORDER BY nama_singkat',[pid])).rows);});
-app.post('/api/projects/:projectId/aplikasi',async c=>{const pid=await guard(c,'projectId',canEdit),d=await json(c);if(!isStr(d?.nama_singkat))fail(400,'nama_singkat wajib');const a=await first(c,'INSERT INTO aplikasi(project_id,nama_singkat,nama_panjang,url) VALUES($1,$2,$3,$4) RETURNING *',[pid,d.nama_singkat,d.nama_panjang||null,d.url||null]);await audit(c,'APLIKASI_CREATED','aplikasi',a.id);await publishLive(c,'APLIKASI_CREATED');return c.json(a,201);});
+app.post('/api/projects/:projectId/aplikasi',async c=>{
+  const pid=await guard(c,'projectId',canEdit),d=await json(c);
+  if(!isStr(d?.nama_singkat))fail(400,'nama_singkat wajib');
+  const a=await atomic(c,async()=>{
+    const inserted=await first(c,'INSERT INTO aplikasi(project_id,nama_singkat,nama_panjang,url) VALUES($1,$2,$3,$4) RETURNING *',[pid,d.nama_singkat,d.nama_panjang||null,d.url||null]);
+    await audit(c,'APLIKASI_CREATED','aplikasi',inserted.id);
+    return inserted;
+  });
+  await publishLive(c,'APLIKASI_CREATED');
+  return c.json(a,201);
+});
 app.get('/api/aplikasi/:aplikasiId/sesi',async c=>{await guard(c,'aplikasiId');return c.json((await q(c,'SELECT * FROM ulo_sesi WHERE aplikasi_id=$1 ORDER BY created_at DESC',[id(c.req.param('aplikasiId'))])).rows);});
 app.post('/api/aplikasi/:aplikasiId/sesi',async c=>{
   const pid=await guard(c,'aplikasiId',canEdit),d=await json(c);
@@ -269,7 +369,27 @@ app.post('/api/aplikasi/:aplikasiId/sesi',async c=>{
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.get('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),s=await first(c,'SELECT * FROM ulo_sesi WHERE id=$1',[sid]);const items=(await q(c,'SELECT * FROM ulo_item WHERE sesi_id=$1 ORDER BY urutan',[sid])).rows;return c.json({...s,items,ringkasan:{total:items.length,lulus:items.filter(i=>i.status==='PASS').length,gagal:items.filter(i=>i.status==='FAIL').length,belum:items.filter(i=>i.status==='BELUM').length}});});
-app.patch('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId',canEdit);const d=await json(c),sid=id(c.req.param('sesiId')),allowed=['hari','tanggal','pukul','tempat','jenis','penguji_nama','penguji_jabatan','penguji_email','penguji_telp','penguji_nip','saksi_nama','saksi_jabatan','saksi_email','saksi_telp','catatan','temuan'],keys=allowed.filter(k=>d?.[k]!==undefined);if(!keys.length)fail(400,'Tidak ada perubahan');const vals=[...keys.map(k=>d[k]),sid],s=await first(c,`UPDATE ulo_sesi SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${vals.length} AND status='DRAFT' RETURNING *`,vals);if(!s)fail(409,'Sesi tidak dapat diubah setelah FINAL');await audit(c,'SESI_UPDATED','sesi',sid);await publishLive(c,'SESI_UPDATED',sid,Number(s.revision));return c.json(s);});
+app.patch('/api/sesi/:sesiId',async c=>{
+  const pid=await guard(c,'sesiId',canEdit),d=await json(c),sid=id(c.req.param('sesiId'));
+  const allowed=['hari','tanggal','pukul','tempat','jenis','penguji_nama','penguji_jabatan','penguji_email','penguji_telp','penguji_nip','saksi_nama','saksi_jabatan','saksi_email','saksi_telp','catatan','temuan'];
+  const keys=allowed.filter(k=>d?.[k]!==undefined);
+  if(!keys.length)fail(400,'Tidak ada perubahan');
+  const expected=d?.expected_revision;
+  if(!Number.isSafeInteger(expected)||expected<1)fail(428,'expected_revision wajib');
+  const record=await atomic(c,async()=>{
+    const old=await first(c,'SELECT status,revision FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+    if(old?.status!=='DRAFT')fail(409,'Sesi tidak dapat diubah setelah FINAL');
+    if(Number(old.revision)!==expected)fail(409,'Data sesi telah diubah pengguna lain. Muat ulang sebelum menyimpan.');
+    const vals=[...keys.map(k=>d[k]),sid];
+    const setters=keys.map((k,i)=>k+'=$'+(i+1)).join(',');
+    const updated=await first(c,'UPDATE ulo_sesi SET '+setters+',revision=revision+1 WHERE id=$'+vals.length+' AND status=\'DRAFT\' RETURNING *',vals);
+    if(!updated)fail(409,'Sesi berubah saat diperbarui');
+    c.set('pid',pid);await audit(c,'SESI_UPDATED','sesi',sid,{revision:Number(updated.revision),fields:keys});
+    return updated;
+  });
+  await publishLive(c,'SESI_UPDATED',sid,Number(record.revision));
+  return c.json(record);
+});
 app.put('/api/sesi/:sesiId/items',async c=>{
   const pid=await guard(c,'sesiId',canEdit),sid=id(c.req.param('sesiId')),d=await json(c),items=d?.items;
   const expected=d?.expected_revision;
