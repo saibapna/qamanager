@@ -6,7 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
-import { assertCanonicalItems, checkFinalization } from './workflow-core.js';
+import { assertCanonicalItems, checkFinalization, runAtomic } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
@@ -18,6 +18,7 @@ class ApiError extends Error{constructor(status,message){super(message);this.sta
 const fail=(status,msg)=>{throw new ApiError(status,msg);};
 const id=x=>{if(!/^[1-9]\d*$/.test(String(x))||!Number.isSafeInteger(Number(x)))fail(400,'ID tidak valid');return Number(x);};
 const q=(c,s,p=[])=>c.get('db').query(s,p);
+const atomic=(c,work)=>runAtomic(sql=>q(c,sql),work);
 const first=async(c,s,p)=>(await q(c,s,p)).rows[0];
 const json=async c=>{if(Number(c.req.header('content-length')||0)>1024*1024)fail(413,'Payload terlalu besar');return await c.req.json().catch(()=>fail(400,'JSON tidak valid'));};
 const sha=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)))).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -162,10 +163,13 @@ app.use('/api/*',async(c,next)=>{
 app.get('/api/auth/me',async c=>{const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1',[c.get('uid')]);return c.json({...u,projects:await members(c,u.id)});});
 app.post('/api/auth/logout',async c=>{
   const d=await json(c),token=d?.refreshToken||getCookie(c,'qa_refresh');
-  // Revoke the access token's backing session immediately, even without refresh cookie.
-  await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE id=$1 AND user_id=$2',[c.get('sid'),c.get('uid')]);
-  if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
-  clearAuthCookies(c);c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
+  // Audit and token revocation commit together; only then clear the cookies.
+  await atomic(c,async()=>{
+    await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE id=$1 AND user_id=$2',[c.get('sid'),c.get('uid')]);
+    if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
+    c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
+  });
+  clearAuthCookies(c);
   return c.json({ok:true});
 });
 // Session-cookie authenticated WebSocket; existing access-session validation ran above.
@@ -232,8 +236,30 @@ const publishLive=async(c,action,sessionId,revision,targetUserId)=>{
 app.get('/api/projects',async c=>c.json((await q(c,`SELECT p.* FROM projects p JOIN project_members pm ON pm.project_id=p.id WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[c.get('uid')])).rows));
 app.post('/api/projects',async c=>{if(!await first(c,'SELECT id FROM users WHERE id=$1 AND is_platform_admin=TRUE AND aktif=TRUE',[c.get('uid')]))fail(403,'Hanya platform admin dapat membuat project');const d=await json(c);if(![d?.kode,d?.nama,d?.instansi].every(isStr))fail(400,'Kode, nama, instansi wajib');await q(c,'BEGIN');try{const p=await first(c,'INSERT INTO projects(kode,nama,instansi,bidang) VALUES($1,$2,$3,$4) RETURNING *',[d.kode.trim().toUpperCase(),d.nama.trim(),d.instansi.trim(),d.bidang||null]);await q(c,"INSERT INTO project_members(user_id,project_id,role) VALUES($1,$2,'ADMIN')",[c.get('uid'),p.id]);c.set('pid',p.id);await audit(c,'PROJECT_CREATED','project',p.id);await q(c,'COMMIT');await publishLive(c,'PROJECT_CREATED');return c.json(p,201);}catch(e){await q(c,'ROLLBACK');throw e;}});
 app.get('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId');return c.json(await first(c,'SELECT * FROM projects WHERE id=$1',[pid]));});
-app.patch('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId',['ADMIN']),d=await json(c),keys=['nama','instansi','bidang'].filter(k=>d?.[k]!==undefined);if(!keys.length)fail(400,'Tidak ada perubahan');if(keys.some(k=>k!=='bidang'&&!isStr(d[k])))fail(400,'Field wajib');const args=[...keys.map(k=>d[k]),pid];const p=await first(c,`UPDATE projects SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')} WHERE id=$${args.length} RETURNING *`,args);await audit(c,'PROJECT_UPDATED','project',pid);await publishLive(c,'PROJECT_UPDATED');return c.json(p);});
-app.delete('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId',['ADMIN']);await q(c,'UPDATE projects SET aktif=FALSE WHERE id=$1',[pid]);await audit(c,'PROJECT_ARCHIVED','project',pid);await publishLive(c,'PROJECT_ARCHIVED');return c.body(null,204);});
+app.patch('/api/projects/:projectId',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']),d=await json(c),keys=['nama','instansi','bidang'].filter(k=>d?.[k]!==undefined);
+  if(!keys.length)fail(400,'Tidak ada perubahan');
+  if(keys.some(k=>k!=='bidang'&&!isStr(d[k])))fail(400,'Field wajib');
+  const args=[...keys.map(k=>d[k]),pid];
+  const p=await atomic(c,async()=>{
+    const updated=await first(c,'UPDATE projects SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+args.length+' RETURNING *',args);
+    if(!updated)fail(404,'Project tidak ditemukan');
+    await audit(c,'PROJECT_UPDATED','project',pid);
+    return updated;
+  });
+  await publishLive(c,'PROJECT_UPDATED');
+  return c.json(p);
+});
+app.delete('/api/projects/:projectId',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']);
+  await atomic(c,async()=>{
+    const p=await first(c,'UPDATE projects SET aktif=FALSE WHERE id=$1 AND aktif=TRUE RETURNING id',[pid]);
+    if(!p)fail(409,'Project sudah diarsipkan');
+    await audit(c,'PROJECT_ARCHIVED','project',pid);
+  });
+  await publishLive(c,'PROJECT_ARCHIVED');
+  return c.body(null,204);
+});
 app.get('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT id,versi,nama,published,checksum,created_at FROM templates WHERE project_id=$1 ORDER BY created_at DESC',[pid])).rows);});
 app.post('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);if(![d?.versi,d?.nama,d?.layout_hbs].every(isStr)||!d?.kategori_map||!d?.page_map)fail(400,'Template tidak lengkap');const checksum=await sha(d.layout_hbs+JSON.stringify(d.partials||{}));const t=await first(c,'INSERT INTO templates(project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[pid,d.versi,d.nama,d.layout_hbs,JSON.stringify(d.partials||{}),JSON.stringify(d.kategori_map),JSON.stringify(d.page_map),checksum]);await audit(c,'TEMPLATE_CREATED','template',t.id);await publishLive(c,'TEMPLATE_CREATED');return c.json(t,201);});
 app.get('/api/templates/:templateId',async c=>{await guard(c,'templateId');return c.json(await first(c,'SELECT * FROM templates WHERE id=$1',[id(c.req.param('templateId'))]));});
