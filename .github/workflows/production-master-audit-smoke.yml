@@ -1,0 +1,41 @@
+name: Production master-audit smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/production-master-audit-smoke.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Verify live Cloudflare staging, RBAC and browser authentication defenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://qamanager.saipulbahri-it.workers.dev'
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/status.json -w '%{http_code}' "$base/api/status")"
+          echo "status HTTP $code"
+          test "$code" = 200
+          jq -e '.ready==true and .pdf=="browser-run"' /tmp/status.json >/dev/null
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/health.json -w '%{http_code}' "$base/api/health")"
+          echo "health HTTP $code"
+          test "$code" = 200
+          jq -e '.ok==true and .database=="connected"' /tmp/health.json >/dev/null
+          for path in '/api/projects' '/api/projects/1/plan' '/api/projects/1/members' '/api/projects/1/dashboard' '/api/sesi/1/defects' '/api/sesi/1/approvals' '/api/sesi/1/history'; do
+            code="$(curl --silent --show-error --max-time 30 -o /tmp/body.json -w '%{http_code}' "$base$path")"
+            echo "$path anonymous HTTP $code"
+            test "$code" = 401
+          done
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/invalid.json -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"invalid@example.invalid","password":"not-a-secret"}' "$base/api/auth/login")"
+          echo "invalid login HTTP $code"
+          test "$code" = 401
+          jq -e '.error=="Kredensial salah"' /tmp/invalid.json >/dev/null
+          code="$(curl --silent --show-error --max-time 30 -o /tmp/csrf.json -w '%{http_code}' -H 'Origin: https://attacker.invalid' -H 'Content-Type: application/json' --data '{"email":"invalid@example.invalid","password":"no"}' "$base/api/auth/login")"
+          echo "cross-origin login HTTP $code"
+          test "$code" = 403
+          curl --fail --silent --show-error --max-time 30 "$base/projects/1/manage" -o /tmp/manage.html
+          grep -q 'text/html' <(curl -sSI --max-time 20 "$base/projects/1/manage" | tr -d '\r')
+          echo "Production master audit smoke PASSED"
