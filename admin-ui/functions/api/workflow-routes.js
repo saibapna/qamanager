@@ -170,6 +170,19 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
       await q(c,'COMMIT');return c.json(out,201);
     }catch(e){await q(c,'ROLLBACK');throw e;}
   });
+  app.get('/api/sesi/:sesiId/defects/:defectId/comments',async c=>{
+    await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),did=id(c.req.param('defectId'));
+    const exists=await first(c,'SELECT 1 FROM ulo_defects WHERE id=$1 AND sesi_id=$2',[did,sid]);if(!exists)fail(404,'Defect tidak ditemukan');
+    return c.json((await q(c,'SELECT id,actor_id,comment,created_at FROM ulo_defect_comments WHERE defect_id=$1 ORDER BY id',[did])).rows);
+  });
+  app.post('/api/sesi/:sesiId/defects/:defectId/comments',async c=>{
+    const pid=await guard(c,'sesiId'),sid=id(c.req.param('sesiId')),did=id(c.req.param('defectId')),d=await json(c);
+    if(!good(d?.comment,4000))fail(422,'Komentar harus 1–4000 karakter');
+    const exists=await first(c,'SELECT 1 FROM ulo_defects WHERE id=$1 AND sesi_id=$2',[did,sid]);if(!exists)fail(404,'Defect tidak ditemukan');
+    const record=await first(c,'INSERT INTO ulo_defect_comments(defect_id,actor_id,comment) VALUES($1,$2,$3) RETURNING id,actor_id,comment,created_at',[did,c.get('uid'),d.comment.trim()]);
+    c.set('pid',pid);await audit(c,'DEFECT_COMMENTED','defect',did,{comment_id:record.id});
+    return c.json(record,201);
+  });
   app.get('/api/sesi/:sesiId/approvals',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId'));
     return c.json((await q(c,'SELECT a.id,a.revision,a.role,a.decision,a.note,a.occurred_at,u.nama FROM ulo_approvals a JOIN users u ON u.id=a.actor_id WHERE a.sesi_id=$1 ORDER BY a.id',[sid])).rows);
