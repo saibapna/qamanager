@@ -123,7 +123,7 @@ app.post('/api/auth/login',async c=>{
   await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[user.id,await sha(refreshToken),time()+604800]);
   await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
   const accessToken=await jwt(c,user,'access');setAuthCookies(c,accessToken,refreshToken);
-  return c.json({accessToken,refreshToken,user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
+  return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
 });
 app.post('/api/auth/refresh',async c=>{
   const d=await json(c);const incoming=d?.refreshToken||getCookie(c,'qa_refresh');let tok;
@@ -134,7 +134,7 @@ app.post('/api/auth/refresh',async c=>{
     if(!update.rowCount)fail(401,'Refresh token tidak berlaku');
     const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1 AND aktif=TRUE',[uid]);if(!u)fail(401,'Akun nonaktif');
     const refreshToken=await jwt(c,u,'refresh');await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[uid,await sha(refreshToken),time()+604800]);
-    await q(c,'COMMIT');const accessToken=await jwt(c,u,'access');setAuthCookies(c,accessToken,refreshToken);return c.json({accessToken,refreshToken,user:{...u,projects:await members(c,uid)}});
+    await q(c,'COMMIT');const accessToken=await jwt(c,u,'access');setAuthCookies(c,accessToken,refreshToken);return c.json({user:{...u,projects:await members(c,uid)}});
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.use('/api/*',async(c,next)=>{
