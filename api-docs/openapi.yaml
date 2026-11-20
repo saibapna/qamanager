@@ -26,10 +26,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    CookieAuth:
-      type: apiKey
-      in: cookie
-      name: qa_access
+
   schemas:
     Error:
       type: object
@@ -723,15 +720,6 @@ paths:
         schema: {type: integer}
       responses:
         '200': {description: PDF ber-versi}
-
-  /projects/{projectId}/plan:
-    get:
-      summary: Read canonical UAT test plan
-      responses:
-        '200':
-          description: OK
-        '403':
-          description: Forbidden
 
   /aplikasi/{aplikasiId}:
     patch:
