@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@/store/authStore';
 import { inputCls } from '@/components/FormField';
-import { LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 
 export function LoginPage() {
   const nav = useNavigate();
@@ -12,15 +12,16 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null); setLoading(true);
     try {
-      const { data } = await axios.post('/api/auth/login', { email, password });
+      const { data } = await axios.post('/api/auth/login', { email: email.trim(), password });
       setSession(data); nav('/projects');
     } catch (e: any) {
-      setError(e.response?.data?.error || 'Login gagal');
+      setError(e.response?.status === 401 ? 'Email atau password tidak cocok. Gunakan password akun QA Manager, bukan password database PostgreSQL.' : (e.response?.data?.error || 'Login gagal. Periksa koneksi API dan coba kembali.'));
     } finally { setLoading(false); }
   };
 
@@ -28,18 +29,22 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
         <h1 className="text-2xl font-bold text-center mb-6">ULO/UAT Manager</h1>
-        <p className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          Lingkungan staging. Database sudah dipersiapkan, tetapi login dan pengelolaan UAT belum diaktifkan di Cloudflare.
-          Status koneksi dapat diperiksa di <a className="underline" href="/api/health">/api/health</a>.
+        <p className="mb-5 text-sm text-slate-600">
+          Masuk menggunakan akun QA Manager yang terdaftar. Password aplikasi berbeda dari password PostgreSQL.
         </p>
         <form onSubmit={onSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Email</label>
-            <input value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
+            <input type="email" name="email" autoComplete="username" required autoFocus value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
           </div>
           <div className="mb-6">
             <label className="block text-sm font-medium mb-1">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} />
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className={`${inputCls} pr-12`} />
+              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute inset-y-0 right-2 flex items-center px-2 text-slate-500 hover:text-slate-900" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} aria-pressed={showPassword}>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
           <button type="submit" disabled={loading}
