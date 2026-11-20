@@ -84,3 +84,38 @@ export function checkApprovalState(session, items, catalog, options = {}) {
   }
   return checkFinalization(items, catalog, options);
 }
+
+/** Pure authorization and state-machine validation for defect mutations. */
+export function validateDefectEdit(previousStatus, memberRole, changes) {
+  const transitions = {
+    OPEN: ['IN_PROGRESS', 'WAIVED'],
+    IN_PROGRESS: ['FIXED', 'WAIVED'],
+    FIXED: ['REOPENED', 'WAIVED'],
+    REOPENED: ['IN_PROGRESS', 'WAIVED'],
+    VERIFIED: ['REOPENED'],
+    WAIVED: [],
+  };
+  if (!Object.hasOwn(transitions, previousStatus)) throw new Error('Status defect tidak dikenali');
+  if (previousStatus === 'WAIVED') throw new Error('Waiver yang disetujui tidak dapat diubah');
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw new Error('Perubahan defect tidak valid');
+  if (changes.status !== undefined) {
+    if (!transitions[previousStatus].includes(changes.status)) throw new Error('Transisi defect tidak valid');
+    if (changes.status === 'WAIVED') {
+      if (memberRole !== 'APPROVER') throw new Error('Hanya APPROVER dapat waiver');
+      if (typeof changes.resolution_note !== 'string' ||
+          !changes.resolution_note.trim() ||
+          changes.resolution_note.length > 5000) throw new Error('Waiver perlu alasan tertulis');
+    }
+  }
+  if (changes.severity !== undefined && !['LOW','MEDIUM','HIGH','CRITICAL'].includes(changes.severity)) throw new Error('Severity invalid');
+  if (changes.title !== undefined && (typeof changes.title !== 'string' || !changes.title.trim() || changes.title.length > 255)) throw new Error('Judul defect tidak valid');
+  for (const field of ['description','resolution_note']) {
+    if (changes[field] !== undefined && changes[field] !== null &&
+        (typeof changes[field] !== 'string' || changes[field].length > 5000)) {
+      throw new Error(field === 'description' ? 'Deskripsi defect tidak valid' : 'Alasan defect tidak valid');
+    }
+  }
+  const fields = ['severity','status','description','title','owner_id','resolution_note'].filter(k => changes[k] !== undefined);
+  if (!fields.length) throw new Error('Tidak ada perubahan');
+  return fields;
+}
