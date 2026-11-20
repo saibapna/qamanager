@@ -64,7 +64,10 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     }
     await q(c,'BEGIN');
     try{
-      if(await first(c,'SELECT id FROM ulo_sesi WHERE project_id=$1 LIMIT 1 FOR UPDATE',[pid]))fail(409,'Tidak boleh mengubah test plan setelah ada sesi');
+      // Lock the project even when it has zero sessions. Session creation takes the
+      // same lock before reading the plan, avoiding a first-session race.
+      await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
+      if(await first(c,'SELECT id FROM ulo_sesi WHERE project_id=$1 LIMIT 1',[pid]))fail(409,'Tidak boleh mengubah test plan setelah ada sesi');
       await q(c,'DELETE FROM test_plan_items WHERE project_id=$1',[pid]);
       for(const t of items)await q(c,'INSERT INTO test_plan_items(project_id,no,kategori,kebutuhan,urutan,gate_required) VALUES($1,$2,$3,$4,$5,$6)',[pid,t.no,t.kategori,t.kebutuhan,t.urutan,!!t.gate_required]);
       c.set('pid',pid);await audit(c,'TEST_PLAN_REPLACED','project',pid,{count:items.length});
