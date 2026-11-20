@@ -21,7 +21,7 @@ async function passVerify(hash,password){
   const [method,rounds,salt,expected,...extra]=hash.split('$');
   if(method!=='pbkdf2_sha256'||extra.length||!rounds||!salt||!expected)return false;
   const iterations=Number(rounds);
-  if(!Number.isInteger(iterations)||iterations<100000||iterations>2000000)return false;
+  if(!Number.isInteger(iterations)||iterations<100000||iterations>100000)return false;
   try{
     // Workerd's WebCrypto PBKDF2 produced an incorrect result in production.
     // Native node:crypto is supported by Cloudflare Workers with nodejs_compat.
@@ -79,7 +79,7 @@ app.get('/api/status',c=>{
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
 app.get('/api/health/auth-check',async c=>{
   // Diagnostic uses synthetic, non-secret credentials. No user password is inspected or returned.
-  const probeHash='pbkdf2_sha256$310000$ZmFrZS10ZXN0LXNhbHQtMTIzNDU2Nzg5$71tsxSsxRB3B_fN7Akl4W-0vLX-h6I3f8mMvt0N-W5k';
+  const probeHash='pbkdf2_sha256$100000$ZmFrZS10ZXN0LXNhbHQtMTIzNDU2Nzg5$tPhEZAC3SQ-daejWgG6cb0UtgmjLZv8Q4HyS6AqC4L0';
   const cryptography=await passVerify(probeHash,'QA-Manager-crypto-self-test-2026');
   const row=await first(c,"SELECT EXISTS(SELECT 1 FROM users WHERE email='admin@qamanager.local' AND aktif=TRUE) AS readable");
   return c.json({ok:cryptography&&row?.readable===true,crypto_pbkdf2:cryptography,admin_record_visible:row?.readable===true},cryptography&&row?.readable===true?200:503);
