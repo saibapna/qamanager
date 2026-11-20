@@ -25,7 +25,9 @@
     "date-fns": "^3.6.0",
     "hono": "4.13.19",
     "pg": "8.23.1",
-    "pg-cloudflare": "1.4.1"
+    "pg-cloudflare": "1.4.1",
+    "handlebars": "4.7.8",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
