@@ -2,6 +2,8 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { UatWorkflowPanel } from '@/components/UatWorkflowPanel';
+import { useAuth } from '@/store/authStore';
 import { sesiApi, Item } from '@/api/sesi';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -10,10 +12,16 @@ export function SesiDetailPage() {
   const { id } = useParams<{ id: string }>();
   const sid = Number(id);
   const toast = useToast();
+  const [search,setSearch] = useState('');
+  const [statusFilter,setStatusFilter] = useState('ALL');
+  const user = useAuth(s=>s.user);
   const { data: sesi, isLoading, refetch } = useQuery({ queryKey: ['sesi', sid], queryFn: () => sesiApi.get(sid) });
   const [items, setItems] = useState<Item[] | null>(null);
   const {data:outputs=[],refetch:refetchOutputs}=useQuery({queryKey:['outputs',sid],queryFn:()=>sesiApi.outputs(sid)});
   const working = items ?? sesi?.items ?? [];
+  const role = user?.projects.find(p=>p.project_id === sesi?.project_id)?.role;
+  const canEdit = ['ADMIN','TESTER'].includes(role||'');
+  const visibleItems = working.map((it,idx)=>({...it,idx})).filter(it => (statusFilter==='ALL'||it.status===statusFilter) && (!search.trim() || [it.no,it.kebutuhan,it.hasil].some(t=>String(t||'').toLowerCase().includes(search.toLowerCase()))));
 
   const saveMut = useMutation({
     mutationFn: () => sesiApi.updateItems(sid, working),
@@ -49,11 +57,11 @@ export function SesiDetailPage() {
       <PageHeader title={`Sesi #${sesi.id}`} subtitle={`Status: ${sesi.status}`}
         actions={
           <>
-            <button onClick={() => saveMut.mutate()} disabled={!items || sesi.status !== 'DRAFT'}
+            <button onClick={() => saveMut.mutate()} disabled={!items || sesi.status !== 'DRAFT' || !canEdit}
               className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <Save size={16} /> Simpan
             </button>
-            {sesi.status==='DRAFT'&&<button onClick={() => finalizeMut.mutate()} className="px-3 py-2 text-sm border rounded-lg">Finalisasi</button>}
+            {sesi.status==='DRAFT'&&['ADMIN','APPROVER'].includes(role||'')&&<button onClick={() => finalizeMut.mutate()} disabled={finalizeMut.isPending || !!items} className="px-3 py-2 text-sm border rounded-lg disabled:opacity-50">Finalisasi</button>}
             <button onClick={() => pdfMut.mutate()}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700">
               <Download size={16} /> Generate PDF
@@ -76,7 +84,8 @@ export function SesiDetailPage() {
         </div>)}
       </div>}
       <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="flex gap-3 flex-wrap p-4"><input className="border p-2 rounded text-sm" aria-label="Cari test case" placeholder="Cari nomor, kebutuhan, hasil" value={search} onChange={e=>setSearch(e.target.value)}/><select className="border p-2 rounded text-sm" aria-label="Filter status" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="ALL">Semua</option><option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="BELUM">BELUM</option></select><span className="text-xs text-slate-500 self-center">{visibleItems.length} item</span></div>
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th className="text-left px-3 py-2 w-20">No</th>
@@ -87,22 +96,23 @@ export function SesiDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {working.map((it, idx) => (
-              <tr key={idx} className="border-t">
-                <td className="px-3 py-2"><input value={it.no} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { no: e.target.value })} className="w-full px-2 py-1 border rounded text-xs font-mono" /></td>
-                <td className="px-3 py-2"><input value={it.kategori} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { kategori: e.target.value.toUpperCase() })} className="w-full px-2 py-1 border rounded text-xs" /></td>
-                <td className="px-3 py-2"><textarea value={it.kebutuhan} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { kebutuhan: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
-                <td className="px-3 py-2"><textarea value={it.hasil} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { hasil: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
+            {visibleItems.map((it) => (
+              <tr key={it.id??it.no} className="border-t">
+                <td className="px-3 py-2"><span className="font-mono text-xs">{it.no}</span></td>
+                <td className="px-3 py-2"><span className="text-xs">{it.kategori}</span></td>
+                <td className="px-3 py-2"><p className="text-xs whitespace-pre-wrap min-w-44">{it.kebutuhan}</p></td>
+                <td className="px-3 py-2"><textarea aria-label={`Hasil ${it.no}`} value={it.hasil||''} disabled={sesi.status!=='DRAFT'||!canEdit||it.status==='FAIL'} onChange={e => update(it.idx, { hasil: e.target.value })} rows={2} className="w-full px-2 py-1 border rounded text-xs" /></td>
                 <td className="px-3 py-2">
-                  <select value={it.status} disabled={sesi.status!=='DRAFT'} onChange={e => update(idx, { status: e.target.value as Item['status'] })} className="w-full px-2 py-1 border rounded text-xs">
-                    <option>PASS</option><option>FAIL</option><option>BELUM</option>
+                  <select aria-label={`Status ${it.no}`} value={it.status} disabled={sesi.status!=='DRAFT'||!canEdit||it.status==='FAIL'} onChange={e => update(it.idx, { status: e.target.value as Item['status'] })} className="w-full px-2 py-1 border rounded text-xs">
+                    <option>BELUM</option><option>PASS</option><option>FAIL</option>
                   </select>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
+      <UatWorkflowPanel sessionId={sid} projectId={sesi.project_id} status={sesi.status} items={sesi.items||[]}/>
     </>
   );
 }
