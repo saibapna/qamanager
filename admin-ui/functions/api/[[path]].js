@@ -261,13 +261,81 @@ app.delete('/api/projects/:projectId',async c=>{
   return c.body(null,204);
 });
 app.get('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT id,versi,nama,published,checksum,created_at FROM templates WHERE project_id=$1 ORDER BY created_at DESC',[pid])).rows);});
-app.post('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);if(![d?.versi,d?.nama,d?.layout_hbs].every(isStr)||!d?.kategori_map||!d?.page_map)fail(400,'Template tidak lengkap');const checksum=await sha(d.layout_hbs+JSON.stringify(d.partials||{}));const t=await first(c,'INSERT INTO templates(project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[pid,d.versi,d.nama,d.layout_hbs,JSON.stringify(d.partials||{}),JSON.stringify(d.kategori_map),JSON.stringify(d.page_map),checksum]);await audit(c,'TEMPLATE_CREATED','template',t.id);await publishLive(c,'TEMPLATE_CREATED');return c.json(t,201);});
+app.post('/api/projects/:projectId/templates',async c=>{
+  const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);
+  if(![d?.versi,d?.nama,d?.layout_hbs].every(isStr)||!d?.kategori_map||!d?.page_map)fail(400,'Template tidak lengkap');
+  const checksum=await sha(d.layout_hbs+JSON.stringify(d.partials||{}));
+  const t=await atomic(c,async()=>{
+    const inserted=await first(c,'INSERT INTO templates(project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[pid,d.versi,d.nama,d.layout_hbs,JSON.stringify(d.partials||{}),JSON.stringify(d.kategori_map),JSON.stringify(d.page_map),checksum]);
+    await audit(c,'TEMPLATE_CREATED','template',inserted.id);
+    return inserted;
+  });
+  await publishLive(c,'TEMPLATE_CREATED');
+  return c.json(t,201);
+});
 app.get('/api/templates/:templateId',async c=>{await guard(c,'templateId');return c.json(await first(c,'SELECT * FROM templates WHERE id=$1',[id(c.req.param('templateId'))]));});
-app.patch('/api/templates/:templateId',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId')),old=await first(c,'SELECT * FROM templates WHERE id=$1',[tid]);if(old.published)fail(409,'Template sudah published');const d=await json(c),keys=['nama','layout_hbs','partials','kategori_map','page_map'].filter(k=>d?.[k]!==undefined);if(!keys.length)return c.json(old);const args=keys.map(k=>['partials','kategori_map','page_map'].includes(k)?JSON.stringify(d[k]):d[k]);args.push(await sha((d.layout_hbs??old.layout_hbs)+JSON.stringify(d.partials??old.partials)),tid);const t=await first(c,`UPDATE templates SET ${keys.map((k,i)=>`${k}=$${i+1}`).join(',')},checksum=$${keys.length+1} WHERE id=$${keys.length+2} AND published=FALSE RETURNING *`,args);await audit(c,'TEMPLATE_UPDATED','template',tid);await publishLive(c,'TEMPLATE_UPDATED');return c.json(t);});
-app.post('/api/templates/:templateId/publish',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId'));const t=await first(c,'UPDATE templates SET published=TRUE WHERE id=$1 AND published=FALSE RETURNING *',[tid]);if(!t)fail(409,'Template sudah published');await audit(c,'TEMPLATE_PUBLISHED','template',tid);await publishLive(c,'TEMPLATE_PUBLISHED');return c.json(t);});
-app.delete('/api/templates/:templateId',async c=>{await guard(c,'templateId',['ADMIN']);const tid=id(c.req.param('templateId'));const t=await first(c,'SELECT published FROM templates WHERE id=$1',[tid]);if(t.published)fail(409,'Template published tidak dapat dihapus');await q(c,'DELETE FROM templates WHERE id=$1',[tid]);await audit(c,'TEMPLATE_DELETED','template',tid);await publishLive(c,'TEMPLATE_DELETED');return c.body(null,204);});
+app.patch('/api/templates/:templateId',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId')),d=await json(c);
+  const keys=['nama','layout_hbs','partials','kategori_map','page_map'].filter(k=>d?.[k]!==undefined);
+  if(!keys.length){
+    const old=await first(c,'SELECT * FROM templates WHERE id=$1',[tid]);
+    if(!old)fail(404,'Template tidak ditemukan');
+    return c.json(old);
+  }
+  const t=await atomic(c,async()=>{
+    const old=await first(c,'SELECT * FROM templates WHERE id=$1 FOR UPDATE',[tid]);
+    if(!old)fail(404,'Template tidak ditemukan');
+    if(old.published)fail(409,'Template sudah published');
+    const args=keys.map(k=>['partials','kategori_map','page_map'].includes(k)?JSON.stringify(d[k]):d[k]);
+    args.push(await sha((d.layout_hbs??old.layout_hbs)+JSON.stringify(d.partials??old.partials)),tid);
+    const setters=keys.map((k,i)=>k+'=$'+(i+1)).join(',');
+    const sql='UPDATE templates SET '+setters+',checksum=$'+(keys.length+1)+' WHERE id=$'+(keys.length+2)+' AND published=FALSE RETURNING *';
+    const updated=await first(c,sql,args);
+    if(!updated)fail(409,'Template sudah published');
+    await audit(c,'TEMPLATE_UPDATED','template',tid);
+    return updated;
+  });
+  await publishLive(c,'TEMPLATE_UPDATED');
+  return c.json(t);
+});
+app.post('/api/templates/:templateId/publish',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId'));
+  const t=await atomic(c,async()=>{
+    const updated=await first(c,'UPDATE templates SET published=TRUE WHERE id=$1 AND published=FALSE RETURNING *',[tid]);
+    if(!updated)fail(409,'Template sudah published');
+    await audit(c,'TEMPLATE_PUBLISHED','template',tid);
+    return updated;
+  });
+  await publishLive(c,'TEMPLATE_PUBLISHED');
+  return c.json(t);
+});
+app.delete('/api/templates/:templateId',async c=>{
+  await guard(c,'templateId',['ADMIN']);
+  const tid=id(c.req.param('templateId'));
+  await atomic(c,async()=>{
+    const t=await first(c,'SELECT published FROM templates WHERE id=$1 FOR UPDATE',[tid]);
+    if(!t)fail(404,'Template tidak ditemukan');
+    if(t.published)fail(409,'Template published tidak dapat dihapus');
+    await q(c,'DELETE FROM templates WHERE id=$1',[tid]);
+    await audit(c,'TEMPLATE_DELETED','template',tid);
+  });
+  await publishLive(c,'TEMPLATE_DELETED');
+  return c.body(null,204);
+});
 app.get('/api/projects/:projectId/aplikasi',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT * FROM aplikasi WHERE project_id=$1 ORDER BY nama_singkat',[pid])).rows);});
-app.post('/api/projects/:projectId/aplikasi',async c=>{const pid=await guard(c,'projectId',canEdit),d=await json(c);if(!isStr(d?.nama_singkat))fail(400,'nama_singkat wajib');const a=await first(c,'INSERT INTO aplikasi(project_id,nama_singkat,nama_panjang,url) VALUES($1,$2,$3,$4) RETURNING *',[pid,d.nama_singkat,d.nama_panjang||null,d.url||null]);await audit(c,'APLIKASI_CREATED','aplikasi',a.id);await publishLive(c,'APLIKASI_CREATED');return c.json(a,201);});
+app.post('/api/projects/:projectId/aplikasi',async c=>{
+  const pid=await guard(c,'projectId',canEdit),d=await json(c);
+  if(!isStr(d?.nama_singkat))fail(400,'nama_singkat wajib');
+  const a=await atomic(c,async()=>{
+    const inserted=await first(c,'INSERT INTO aplikasi(project_id,nama_singkat,nama_panjang,url) VALUES($1,$2,$3,$4) RETURNING *',[pid,d.nama_singkat,d.nama_panjang||null,d.url||null]);
+    await audit(c,'APLIKASI_CREATED','aplikasi',inserted.id);
+    return inserted;
+  });
+  await publishLive(c,'APLIKASI_CREATED');
+  return c.json(a,201);
+});
 app.get('/api/aplikasi/:aplikasiId/sesi',async c=>{await guard(c,'aplikasiId');return c.json((await q(c,'SELECT * FROM ulo_sesi WHERE aplikasi_id=$1 ORDER BY created_at DESC',[id(c.req.param('aplikasiId'))])).rows);});
 app.post('/api/aplikasi/:aplikasiId/sesi',async c=>{
   const pid=await guard(c,'aplikasiId',canEdit),d=await json(c);
