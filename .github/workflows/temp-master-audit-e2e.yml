@@ -1,0 +1,112 @@
+name: TEMP master-audit E2E (synthetic user only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temp-master-audit-e2e.yml']
+permissions:
+  contents: read
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      BASE: 'https://qamanager.saipulbahri-it.workers.dev'
+      EMAIL: 'qamanager-audit-tester-20261121@example.invalid'
+      PASSWORD: 'S1vPJBKZ8oF4KCnjW-SeWCZqKo32NXt2jWJnqLsdsx5wtaw3'
+      PROJECT_ID: '5'
+      APP_ID: '4'
+      TEMPLATE_ID: '4'
+    steps:
+      - name: Verify real cookie login, tenant isolation, 71-item UAT, defects, evidence, refresh and logout
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$PASSWORD"
+          auth=(-b /tmp/qa-cookie -c /tmp/qa-cookie)
+          json=(-H 'Content-Type: application/json' -H 'X-Requested-With: XMLHttpRequest')
+          request () {
+            local method="$1"; local path="$2"; local body="$3"; local out="$4"
+            curl --silent --show-error --max-time 45 "${auth[@]}" "${json[@]}" -X "$method" --data-binary "$body" -o "$out" -w '%{http_code}' "$BASE$path"
+          }
+          jq -n --arg email "$EMAIL" --arg password "$PASSWORD" '{email:$email,password:$password}' >/tmp/login-request
+          status=$(request POST /api/auth/login @/tmp/login-request /tmp/login)
+          echo "valid synthetic login HTTP $status"
+          test "$status" = 200
+          jq -e '(.user.is_platform_admin == false) and (.user.projects | any(.project_id==5 and .role=="TESTER")) and (has("accessToken")|not) and (has("refreshToken")|not)' /tmp/login >/dev/null
+          grep -q 'qa_access' /tmp/qa-cookie
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/me -w '%{http_code}' "$BASE/api/auth/me")
+          echo "cookie session /auth/me HTTP $status"
+          test "$status" = 200
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/plan -w '%{http_code}' "$BASE/api/projects/$PROJECT_ID/plan")
+          echo "canonical plan HTTP $status"
+          test "$status" = 200
+          jq -e 'length==71' /tmp/plan >/dev/null
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/other -w '%{http_code}' "$BASE/api/projects/1/plan")
+          echo "cross-project plan HTTP $status"
+          test "$status" = 403
+          status=$(request POST /api/projects '{"kode":"NOT_ALLOWED","nama":"DENIED","instansi":"DENIED"}' /tmp/forbidden)
+          echo "non-platform-admin create HTTP $status"
+          test "$status" = 403
+          status=$(request POST /api/aplikasi/$APP_ID/sesi '{"template_id":4,"jenis":"UAT synthetic integration","tempat":"Automated QA"}' /tmp/session)
+          echo "create real UAT session HTTP $status"
+          test "$status" = 201
+          jq -e '.item_count==71' /tmp/session >/dev/null
+          sid=$(jq -r '.id' /tmp/session)
+          echo "created temporary session #$sid"
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/session-detail -w '%{http_code}' "$BASE/api/sesi/$sid")
+          test "$status" = 200
+          jq -e '.items | length==71 and all(.status=="BELUM")' /tmp/session-detail >/dev/null
+          jq -n --slurpfile s /tmp/session-detail '{items: [$s[0].items[:70][] | {no,kategori,kebutuhan,urutan,status,hasil}]}' >/tmp/short
+          status=$(request PUT "/api/sesi/$sid/items" @/tmp/short /tmp/short-response)
+          echo "incomplete test plan rejected HTTP $status"
+          test "$status" = 422
+          jq -n --slurpfile s /tmp/session-detail '{items: [$s[0].items[] | {no,kategori,kebutuhan,urutan,status:"PASS",hasil:"Automated verification PASS"}]}' >/tmp/items
+          jq '.items[0].status="FAIL" | .items[0].hasil="Synthetic first run failure"' /tmp/items >/tmp/failed-items
+          status=$(request PUT "/api/sesi/$sid/items" @/tmp/failed-items /tmp/item-response)
+          echo "recorded FAIL and PASS items HTTP $status"
+          test "$status" = 200
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/defects -w '%{http_code}' "$BASE/api/sesi/$sid/defects")
+          echo "auto-defects HTTP $status"
+          test "$status" = 200
+          jq -e 'length == 1 and .[0].status == "OPEN"' /tmp/defects >/dev/null
+          did=$(jq -r '.[0].id' /tmp/defects)
+          status=$(request PATCH "/api/sesi/$sid/defects/$did" '{"status":"IN_PROGRESS"}' /tmp/d1)
+          echo "defect IN_PROGRESS HTTP $status"
+          test "$status" = 200
+          status=$(request PATCH "/api/sesi/$sid/defects/$did" '{"status":"FIXED"}' /tmp/d2)
+          echo "defect FIXED HTTP $status"
+          test "$status" = 200
+          status=$(request POST "/api/sesi/$sid/defects/$did/retests" '{"status":"PASS","note":"Automated retest verified"}' /tmp/retest)
+          echo "defect retest PASS HTTP $status"
+          test "$status" = 201
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/final-s -w '%{http_code}' "$BASE/api/sesi/$sid")
+          test "$status" = 200
+          jq -e '.items | length==71 and all(.status=="PASS")' /tmp/final-s >/dev/null
+          iid=$(jq -r '.items[0].id' /tmp/final-s)
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/k4kAAAAASUVORK5CYII=' | base64 -d >/tmp/smoke.png
+          status=$(curl --silent --show-error --max-time 40 "${auth[@]}" -H 'X-Requested-With: XMLHttpRequest' -F 'file=@/tmp/smoke.png;type=image/png' -o /tmp/evidence -w '%{http_code}' "$BASE/api/sesi/$sid/items/$iid/evidence")
+          echo "upload UAT evidence HTTP $status"
+          test "$status" = 201
+          eid=$(jq -r '.id' /tmp/evidence)
+          status=$(curl --silent --show-error --max-time 40 "${auth[@]}" -o /tmp/returned.png -w '%{http_code}' "$BASE/api/sesi/$sid/items/$iid/evidence/$eid/download")
+          echo "private evidence download HTTP $status"
+          test "$status" = 200
+          cmp /tmp/smoke.png /tmp/returned.png
+          status=$(request POST "/api/sesi/$sid/finalize" '{}' /tmp/denied-finalize)
+          echo "TESTER finalize forbidden HTTP $status"
+          test "$status" = 403
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/history -w '%{http_code}' "$BASE/api/sesi/$sid/history")
+          echo "immutable history HTTP $status"
+          test "$status" = 200
+          jq -e 'length > 0' /tmp/history >/dev/null
+          status=$(request POST /api/auth/refresh '{}' /tmp/refresh)
+          echo "refresh rotation HTTP $status"
+          test "$status" = 200
+          jq -e '(has("accessToken")|not) and (has("refreshToken")|not)' /tmp/refresh >/dev/null
+          status=$(request POST /api/auth/logout '{}' /tmp/logout)
+          echo "server logout HTTP $status"
+          test "$status" = 200
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/after -w '%{http_code}' "$BASE/api/auth/me")
+          echo "after logout /me HTTP $status"
+          test "$status" = 401
+          echo "End-to-end UAT first-stage integration succeeded"
