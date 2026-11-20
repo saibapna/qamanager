@@ -58,6 +58,13 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
         try{hash=hashCloudflarePassword(d.password);}catch(e){fail(422,e.message);}
         user=await first(c,'INSERT INTO users(email,nama,password_hash) VALUES($1,$2,$3) RETURNING id,email',[d.email.trim().toLowerCase(),d.nama.trim(),hash]);
       }
+      await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
+      const existing=await first(c,'SELECT role FROM project_members WHERE user_id=$1 AND project_id=$2',[user.id,pid]);
+      if(existing?.role==='ADMIN'&&d.role!=='ADMIN'){
+        const admins=await first(c,"SELECT count(*)::int AS total FROM project_members WHERE project_id=$1 AND role='ADMIN'",[pid]);
+        if(admins.total<=1)fail(409,'Tidak boleh menurunkan role ADMIN terakhir pada project');
+        if(user.id===c.get('uid'))fail(409,'Tidak boleh menurunkan role admin diri sendiri');
+      }
       await q(c,'INSERT INTO project_members(user_id,project_id,role) VALUES($1,$2,$3) ON CONFLICT(user_id,project_id) DO UPDATE SET role=excluded.role',[user.id,pid,d.role]);
       c.set('pid',pid);await audit(c,'PROJECT_MEMBER_SET','project_member',user.id,{role:d.role});
       await q(c,'COMMIT');return c.json({id:user.id,email:user.email,role:d.role},201);
@@ -65,8 +72,10 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
   });
   app.delete('/api/projects/:projectId/members/:userId',async c=>{
     const pid=await guard(c,'projectId',['ADMIN']),uid=id(c.req.param('userId'));
+    if(uid===c.get('uid'))fail(409,'Tidak boleh mencabut akses diri sendiri');
     await q(c,'BEGIN');
     try{
+      await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
       const target=await first(c,'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2 FOR UPDATE',[pid,uid]);
       if(!target)fail(404,'Anggota tidak ditemukan');
       if(target.role==='ADMIN'){
