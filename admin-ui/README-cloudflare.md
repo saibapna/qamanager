@@ -30,12 +30,12 @@ Project administrators manage the canonical test plan. Once the project has sess
 - Authorization resolves tenant membership and role on the server.
 
 ## Release blockers
-See GitHub issue #4. Qualified PKI signatures, official visual PDF fixture SSIM/heatmap validation, production file storage/backup/restore drill and CI/CD verification are not implied by a passing build or health check.
+See GitHub issue #4. Qualified PKI signatures, official visual PDF fixture SSIM/heatmap validation, production file storage/backup/restore drill and full multi-role approval integration tests are not implied by a passing build or health check.
 
 ## Auto-deploy Worker (GitHub Actions)
 
 Workflow `.github/workflows/build-cloudflare-worker.yml` tests and builds React+Hono on PRs and `main`, then deploys the compiled artifact to the existing `qamanager` Worker **only on a push to `main`**. Required GitHub repository secrets: `CLOUDFLARE_API_TOKEN` (least-privilege Cloudflare Worker edit/read) and `CLOUDFLARE_ACCOUNT_ID`. Neither value belongs in the source tree.
 
-The deploy script checks the current Worker settings before upload, preserves `HYPERDRIVE`, `BROWSER`, `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`, checks the bindings afterward, and confirms `/projects` serves HTML without download while `/api/status` returns JSON/ready. On failed preflight, the deployment is **not started**. A failed post-upload smoke test fails the workflow but **does not automatically roll back**.
+The deploy script checks the current Worker settings before upload, preserves `HYPERDRIVE`, `BROWSER`, `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`, checks the bindings afterward, and confirms `/projects` serves HTML without download while `/api/status` returns JSON/ready. On failed preflight, the deployment is **not started**. A failed post-upload smoke test now fails the workflow **and attempts to restore the previous Worker version's traffic allocation** via the Cloudflare Deployments API. This rollback is covered by an isolated regression test. Database migrations and external side effects are **not** rolled back automatically.
 
 **Critical migration gate:** Any SQL migration required by an application release must be applied and independently verified **before the PR is merged to `main`**. In particular, `db/migrations/20261121_master_audit_workflow.sql` is required by the current application; otherwise deployments can pass build and break at runtime. Protect `main` with required PR checks/review. Build checks alone are not production UAT.
