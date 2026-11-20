@@ -1,7 +1,7 @@
 name: Build Cloudflare Hono Worker
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/master-audit-p0-p1-20261121']
     paths:
       - 'admin-ui/**'
       - '.github/workflows/build-cloudflare-worker.yml'
