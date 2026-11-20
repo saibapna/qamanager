@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:worker": "node scripts/inline-worker-assets.mjs && esbuild worker/index.ts --bundle --platform=node --target=es2022 --format=esm --external:pg-native --external:cloudflare:sockets --conditions=workerd --banner:js='import { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);' --minify --outfile=worker-dist/qamanager-worker.mjs"
+    "build:worker": "node scripts/inline-worker-assets.mjs && esbuild worker/index.ts --bundle --platform=node --target=es2022 --format=esm --external:pg-native --external:cloudflare:sockets --external:cloudflare:workers --conditions=workerd --banner:js='import { createRequire } from \"node:module\"; const require = createRequire(import.meta.url);' --minify --outfile=worker-dist/qamanager-worker.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

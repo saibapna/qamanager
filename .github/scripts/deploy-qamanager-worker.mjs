@@ -29,11 +29,12 @@ async function cloudflare(url, options = {}) {
   return data.result;
 }
 
-function assertBindings(settings, phase) {
+function assertBindings(settings, phase, requireRealtime = false) {
   const bindings = settings?.bindings;
   assert.ok(Array.isArray(bindings), `${phase}: cannot verify Worker bindings`);
   const actual = new Map(bindings.map(b => [b.name, b.type]));
-  assert.equal(actual.size, expected.size, `${phase}: unexpected binding set; update deployment safeguards first`);
+  assert.equal(actual.size, expected.size + (requireRealtime ? 1 : 0), `${phase}: unexpected binding set; update deployment safeguards first`);
+  if(requireRealtime)assert.equal(actual.get('PROJECT_LIVE'),'durable_object_namespace',`${phase}: missing ProjectLive binding`);
   for (const [name, type] of expected) {
     assert.equal(actual.get(name), type, `${phase}: missing or changed binding ${name}`);
   }
@@ -50,14 +51,19 @@ assert.equal(previousVersions.reduce((sum, version) => sum + version.percentage,
   'Previous deployment traffic percentages are invalid');
 
 const before = await cloudflare(`${apiBase}/settings`);
-const hyperdriveId = assertBindings(before, 'preflight');
+const existingRealtime=before.bindings?.some(b=>b.name==='PROJECT_LIVE');
+const hyperdriveId = assertBindings(before, 'preflight',existingRealtime);
 assert.equal(before.compatibility_date, '2026-11-20', 'compatibility date changed; review before auto-deploy');
 assert.ok(before.compatibility_flags?.includes('nodejs_compat'), 'nodejs_compat missing');
 
 const code = await readFile(new URL('../../admin-ui/worker-dist/qamanager-worker.mjs', import.meta.url));
 const metadata = {
   main_module: 'qamanager-worker.mjs',
-  keep_bindings: ['browser', 'hyperdrive', 'secret_text'],
+  keep_bindings: ['browser', 'hyperdrive', 'secret_text', ...(existingRealtime?['durable_object_namespace']:[])],
+  ...(!existingRealtime?{
+    bindings:[{name:'PROJECT_LIVE',type:'durable_object_namespace',class_name:'ProjectLive'}],
+    migrations:{new_tag:'qamanager-realtime-v1',new_sqlite_classes:['ProjectLive']},
+  }:{}),
   compatibility_date: before.compatibility_date,
   compatibility_flags: before.compatibility_flags,
   observability: before.observability,
@@ -66,14 +72,14 @@ const form = new FormData();
 form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
 form.append('qamanager-worker.mjs', new Blob([code], { type: 'application/javascript+module' }), 'qamanager-worker.mjs');
 
-console.log(`Deploying ${workerName}; preserving ${expected.size} existing bindings`);
+console.log(`Deploying ${workerName}; preserving ${expected.size} protected bindings and enabling PROJECT_LIVE`);
 let uploadSucceeded = false;
 try {
   await cloudflare(apiBase, { method: 'PUT', body: form });
   uploadSucceeded = true;
 
   const after = await cloudflare(`${apiBase}/settings`);
-  assert.equal(assertBindings(after, 'post-deploy'), hyperdriveId, 'Hyperdrive binding changed');
+  assert.equal(assertBindings(after, 'post-deploy',true), hyperdriveId, 'Hyperdrive binding changed');
 
   async function smoke(path, expectedType) {
     const response = await fetch(hostname + path, { headers: { 'Cache-Control': 'no-cache' } });

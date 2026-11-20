@@ -19,7 +19,7 @@ export function ProjectsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ kode: '', nama: '', instansi: '', bidang: '' });
 
-  const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list });
+  const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list, refetchInterval: 15000 });
 
   const createMut = useMutation({
     mutationFn: projectsApi.create,

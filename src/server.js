@@ -234,7 +234,8 @@ app.patch('/api/sesi/:sesiId',edit,wrap(async(req,res)=>{
   res.json(s);
 }));
 app.put('/api/sesi/:sesiId/items',edit,wrap(async(req,res)=>{
-  const items=req.body?.items;
+  const items=req.body?.items,expected=req.body?.expected_revision;
+  if(!Number.isSafeInteger(expected)||expected<0)return res.status(428).json({error:'expected_revision wajib'});
   if(!Array.isArray(items)||!items.length||items.length>1000) return res.status(400).json({error:'items wajib array 1-1000'});
   const ids=new Set(),orders=new Set();
   for(const it of items){
@@ -247,16 +248,22 @@ app.put('/api/sesi/:sesiId/items',edit,wrap(async(req,res)=>{
   const tx=await db.connect();
   try {
     await tx.query('BEGIN');
-    const {rows:[s]}=await tx.query('SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[req.params.sesiId]);
-    if(s.status!=='DRAFT'){await tx.query('ROLLBACK');return res.status(409).json({error:'Hanya sesi DRAFT dapat diubah'});}
-    await tx.query('DELETE FROM ulo_item WHERE sesi_id=$1',[req.params.sesiId]);
+    const {rows:[session]}=await tx.query('SELECT status,revision FROM ulo_sesi WHERE id=$1 FOR UPDATE',[req.params.sesiId]);
+    if(!session||session.status!=='DRAFT'){await tx.query('ROLLBACK');return res.status(409).json({error:'Hanya sesi DRAFT dapat diubah'});}
+    if(Number(session.revision)!==expected){await tx.query('ROLLBACK');return res.status(409).json({error:'Data sesi telah diubah pengguna lain. Muat ulang sebelum menyimpan.'});}
+    await tx.query('DELETE FROM ulo_item WHERE sesi_id=$1 AND no <> ALL($2::text[])',[req.params.sesiId,[...ids]]);
+    await tx.query('UPDATE ulo_item SET urutan=urutan+1000000 WHERE sesi_id=$1',[req.params.sesiId]);
     for(const it of items){
       await tx.query(`INSERT INTO ulo_item(sesi_id,no,kategori,kebutuhan,hasil,status,urutan)
-        VALUES($1,$2,$3,$4,$5,$6,$7)`,[req.params.sesiId,it.no,it.kategori,it.kebutuhan,it.hasil??null,it.status,it.urutan]);
+        VALUES($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT(sesi_id,no) DO UPDATE SET kategori=EXCLUDED.kategori,kebutuhan=EXCLUDED.kebutuhan,
+        hasil=EXCLUDED.hasil,status=EXCLUDED.status,urutan=EXCLUDED.urutan`,
+        [req.params.sesiId,it.no,it.kategori,it.kebutuhan,it.hasil??null,it.status,it.urutan]);
     }
-    await audit(tx,req,'ITEMS_REPLACED','sesi',req.params.sesiId,{count:items.length});
+    const {rows:[updated]}=await tx.query('UPDATE ulo_sesi SET revision=revision+1 WHERE id=$1 RETURNING revision',[req.params.sesiId]);
+    await audit(tx,req,'ITEMS_UPDATED','sesi',req.params.sesiId,{count:items.length,revision:Number(updated.revision)});
     await tx.query('COMMIT');
-    res.json({ok:true,count:items.length});
+    res.json({ok:true,count:items.length,revision:Number(updated.revision)});
   }catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
 }));
 app.get('/api/sesi/:sesiId/outputs',read,wrap(async(req,res)=>{

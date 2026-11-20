@@ -1,8 +1,10 @@
 import { app } from '../functions/api/[[path]].js';
 import { assets } from './generated-assets.mjs';
+export { ProjectLive } from './project-live.js';
 
 type BindingEnv = {
   HYPERDRIVE?: { connectionString: string };
+  PROJECT_LIVE?: DurableObjectNamespace;
   JWT_ACCESS_SECRET?: string;
   JWT_REFRESH_SECRET?: string;
 };
