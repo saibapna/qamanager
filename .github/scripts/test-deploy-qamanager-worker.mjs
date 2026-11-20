@@ -9,10 +9,14 @@ const entry=resolve(root,'.github/scripts/deploy-qamanager-worker.mjs');
 const mock=pathToFileURL(resolve(root,'.github/scripts/mock-cloudflare-deploy-fetch.mjs')).href;
 const target=resolve(root,'admin-ui/worker-dist/qamanager-worker.mjs');
 const directory=resolve(root,'admin-ui/worker-dist');
-if(existsSync(target))throw Error('Refusing to overwrite real Worker artifact');
-mkdirSync(directory,{recursive:true});
-writeFileSync(target,'export default {fetch(){return new Response("ok")}};\n');
+// Use the already-built Worker artifact in CI; for isolated local tests create a throwaway fixture.
+const createdFixture=!existsSync(target);
+if(createdFixture){
+  mkdirSync(directory,{recursive:true});
+  writeFileSync(target,'export default {fetch(){return new Response("ok")}};\n');
+}
 process.on('exit',()=>{
+  if(!createdFixture)return;
   try{unlinkSync(target);}catch{}
   try{rmdirSync(directory);}catch{}
 });
