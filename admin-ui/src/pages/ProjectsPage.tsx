@@ -20,6 +20,20 @@ export function ProjectsPage() {
   const [form, setForm] = useState({ kode: '', nama: '', instansi: '', bidang: '' });
 
   const { data: projects = [], isLoading } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list, refetchInterval: 15000 });
+  const { data: portfolio = [], isError: portfolioError } = useQuery({
+    queryKey: ['portfolio'],
+    queryFn: projectsApi.portfolio,
+    refetchInterval: 15000
+  });
+  const totals = portfolio.reduce((acc, row) => ({
+    sessions: acc.sessions + row.total_sessions,
+    pass: acc.pass + row.pass_items,
+    fail: acc.fail + row.fail_items,
+    remaining: acc.remaining + row.pending_items,
+    defects: acc.defects + row.open_defects
+  }), {sessions:0,pass:0,fail:0,remaining:0,defects:0});
+  const progress = new Map(portfolio.map(row => [row.id,row]));
+
 
   const createMut = useMutation({
     mutationFn: projectsApi.create,
@@ -40,7 +54,15 @@ export function ProjectsPage() {
           className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700">
           <Plus size={16} /> Project Baru
         </button>:undefined} />
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <section aria-label="Ringkasan UAT lintas project" className="mb-5">
+        <h2 className="text-sm font-semibold mb-2">Ringkasan semua project yang dapat Anda akses</h2>
+        {portfolioError && <p role="alert" className="text-sm text-red-700 mb-2">Gagal memuat ringkasan lintas project. Data tabel project tetap tersedia.</p>}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {([['Sesi UAT',totals.sessions],['PASS',totals.pass],['FAIL',totals.fail],['BELUM',totals.remaining],['Defect aktif',totals.defects]] as const).map(([label,value])=>
+            <div key={label} className="rounded-xl border bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-2xl">{value}</p></div>)}
+        </div>
+      </section>
+      <div className="bg-white rounded-xl border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b">
             <tr>
@@ -48,12 +70,13 @@ export function ProjectsPage() {
               <th className="text-left px-4 py-3">Nama</th>
               <th className="text-left px-4 py-3">Instansi</th>
               <th className="text-left px-4 py-3">Status</th>
+              <th className="text-left px-4 py-3">Progres UAT</th>
               <th className="text-right px-4 py-3">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>
             ) : projects.length === 0 ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Belum ada project</td></tr>
             ) : projects.map(p => (
@@ -63,6 +86,12 @@ export function ProjectsPage() {
                 <td className="px-4 py-3 text-slate-500">{p.instansi}</td>
                 <td className="px-4 py-3">
                   <Badge variant={p.aktif ? 'success' : 'neutral'}>{p.aktif ? 'Aktif' : 'Nonaktif'}</Badge>
+                </td>
+                <td className="px-4 py-3 text-xs text-slate-600">
+                  {progress.has(p.id) ? <span>
+                    {progress.get(p.id)?.pass_items}/{progress.get(p.id)?.total_items} PASS
+                    <span className="block">{progress.get(p.id)?.open_defects} defect aktif</span>
+                  </span> : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button onClick={() => nav(`/projects/${p.id}`)} aria-label={`Buka project ${p.nama}`} className="p-1.5 hover:bg-blue-50 rounded text-blue-600 mr-1">
