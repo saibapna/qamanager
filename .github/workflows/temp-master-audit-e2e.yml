@@ -99,6 +99,14 @@ jobs:
           echo "immutable history HTTP $status"
           test "$status" = 200
           jq -e 'length > 0' /tmp/history >/dev/null
+          status="$(curl --silent --show-error --max-time 180 "${auth[@]}" -X POST -o /tmp/ulo.pdf -w '%{http_code}' "$BASE/api/sesi/$sid/pdf")"
+          echo "Generate UAT PDF HTTP $status"
+          if [ "$status" != "200" ]; then
+            head -c 350 /tmp/ulo.pdf | tr -c '[:print:]' ' '
+            exit 1
+          fi
+          test "$(head -c 5 /tmp/ulo.pdf)" = '%PDF-'
+          echo "Generated valid PDF bytes $(wc -c </tmp/ulo.pdf)"
           status=$(request POST /api/auth/refresh '{}' /tmp/refresh)
           echo "refresh rotation HTTP $status"
           test "$status" = 200
