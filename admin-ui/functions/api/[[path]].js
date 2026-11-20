@@ -52,13 +52,25 @@ app.onError((error,c)=>{
  if(error.code==='23503'||error.code==='23514')return c.json({error:'Validasi atau relasi database gagal'},400);
  console.error('qamanager_hono',error?.message||'error');return c.json({error:'Kesalahan server'},500);
 });
+const missingBindings=c=>[
+  ...(!c.env.HYPERDRIVE?.connectionString?['HYPERDRIVE']:[]),
+  ...(!c.env.JWT_ACCESS_SECRET?['JWT_ACCESS_SECRET']:[]),
+  ...(!c.env.JWT_REFRESH_SECRET?['JWT_REFRESH_SECRET']:[]),
+];
 app.use('/api/*',async(c,next)=>{
   c.header('X-Content-Type-Options','nosniff');c.header('Cache-Control','no-store');
-  if(!c.env.HYPERDRIVE?.connectionString||!c.env.JWT_ACCESS_SECRET||!c.env.JWT_REFRESH_SECRET)return c.json({error:'Konfigurasi server belum lengkap'},503);
+  // Status is public and must remain inspectable before database credentials are configured.
+  if(c.req.path==='/api/status')return next();
+  const missing=missingBindings(c);
+  if(missing.length)return c.json({error:'Konfigurasi server belum lengkap',missing_bindings:missing},503);
   const db=new Client({connectionString:c.env.HYPERDRIVE.connectionString,options:'-c search_path=ulo_uat,public',connectionTimeoutMillis:8000});
-  await db.connect();c.set('db',db);try{await next();}finally{await db.end();}
+  try{await db.connect();}catch(error){console.error('qamanager_database_connect',error?.message||'error');return c.json({error:'Koneksi database tidak tersedia'},503);}
+  c.set('db',db);try{await next();}finally{await db.end();}
 });
-app.get('/api/status',c=>c.json({service:'qamanager',runtime:'cloudflare-hono',database:'supabase',pdf:'separate-service-required'}));
+app.get('/api/status',c=>{
+  const missing=missingBindings(c);
+  return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:'separate-service-required',missing_bindings:missing},missing.length?503:200);
+});
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
 app.post('/api/auth/login',async c=>{
   const d=await json(c);if(!isStr(d?.email)||typeof d.password!=='string')fail(400,'Email dan password wajib');
