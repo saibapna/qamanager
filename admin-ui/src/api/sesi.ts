@@ -7,5 +7,6 @@ export const sesiApi = {
   updateItems: (id: number, items: Item[]) => api.put(`/sesi/${id}/items`, { items }),
   generatePdf: (id: number) => api.post(`/sesi/${id}/pdf`, {}, { responseType: 'blob' }).then(r => r.data),
   outputs: (id: number) => api.get<{id:number;versi:number;pdf_path:string;generated_at:string}[]>(`/sesi/${id}/outputs`).then(r => r.data),
+  downloadOutput: (sessionId: number, outputId: number) => api.get<Blob>(`/sesi/${sessionId}/outputs/${outputId}/download`, { responseType: 'blob' }).then(r => r.data),
   finalize: (id: number) => api.post(`/sesi/${id}/finalize`)
 };
