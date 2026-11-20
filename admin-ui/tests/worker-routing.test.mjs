@@ -8,6 +8,7 @@ import ts from 'typescript';
 const workerPath = fileURLToPath(new URL('../worker/index.ts', import.meta.url));
 const source = readFileSync(workerPath, 'utf8')
   .replace(/^import .*;\s*$/gm, '')
+  .replace(/^export\s+\{[^}]+\}(?:\s+from\s+['\"][^'\"]+['\"])?;\s*$/gm, '')
   .replace('export default {', 'const worker = {');
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
