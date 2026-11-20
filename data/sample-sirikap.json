@@ -1,0 +1,65 @@
+{
+  "project": {
+    "instansi": "Badan Perencanaan Pembangunan Daerah Kabupaten Pidie",
+    "bidang": "Bidang Layanan E-Government",
+    "kode_form_1": "S-APP.2.OBJ.3",
+    "kode_form_2": "S-APP.2.OBJ.4",
+    "kode_form_3": "S-APP.2.OBJ.5",
+    "form_title": "Form Uji Aplikasi"
+  },
+  "skpd": { "nama": "Badan Perencanaan Pembangunan Daerah Kabupaten Pidie", "kota": "Kabupaten Pidie" },
+  "aplikasi": {
+    "nama_singkat": "SIRIKAP",
+    "nama_panjang": "Sistem Inovasi dan Riset Kabupaten Pidie",
+    "url": "https://sirikap.dev-government.my.id/"
+  },
+  "sesi": {
+    "hari": "Rabu", "tanggal": "18 November 2026", "pukul": "9:00",
+    "tempat": "Pengujian daring",
+    "jenis": "Uji Layak Operasi (ULO) – uji fungsional non-destruktif"
+  },
+  "penguji": {
+    "nama": "Saipul Bahri, S.Kom", "jabatan": "Penata Layanan Operasional",
+    "email": "saipulbahri@acehprov.go.id", "telp": "0823 6220 6200",
+    "nip": "19880511 202521 1 045"
+  },
+  "saksi": { "nama": "", "jabatan": "", "email": "", "telp": "" },
+  "ringkasan": {
+    "total": 71, "lulus": 58, "gagal": 13, "belum": 0,
+    "catatan": "CREATE tidak persisten sehingga DELETE tidak dapat diuji.",
+    "temuan": "Temuan: unduh panduan, chart/fullscreen, filter tahun Kecamatan, Group Otorisasi."
+  },
+  "pages": [
+    {
+      "pageNumber": 2, "isLastPage": false,
+      "rows": [
+        { "isSection": true, "text": "SIRIKAP - UJI LAYAK OPERASI (NON-DESTRUKTIF)" },
+        { "isSection": true, "text": "AKSES & DASHBOARD" },
+        { "no": "D1", "kebutuhan": "Dashboard: kartu statistik", "hasil": "4 kartu tampil; angka belum direkonsiliasi." },
+        { "no": "D2", "kebutuhan": "Dashboard: grafik progres", "hasil": "Mode Doughnut/Pie dapat dipilih, canvas kosong." }
+      ]
+    },
+    {
+      "pageNumber": 3, "isLastPage": false,
+      "rows": [
+        { "isSection": true, "text": "PARAMETER - DAFTAR OPD" },
+        { "no": "P1", "kebutuhan": "Daftar OPD: navigasi", "hasil": "Halaman terbuka." }
+      ]
+    },
+    {
+      "pageNumber": 4, "isLastPage": false,
+      "rows": [
+        { "isSection": true, "text": "KELITBANGAN & LAPORAN" },
+        { "no": "K1", "kebutuhan": "Kelitbangan: menu", "hasil": "Menu terbuka." }
+      ]
+    },
+    {
+      "pageNumber": 5, "isLastPage": true,
+      "rows": [
+        { "isSection": true, "text": "GATE ULO YANG BELUM TERBUKTI" },
+        { "no": "X1", "kebutuhan": "CRUD: simpan & baca ulang", "hasil": "CREATE GAGAL, recordsTotal tetap." },
+        { "no": "X5", "kebutuhan": "Laporan: render & ekspor", "hasil": "PDF & Excel terverifikasi." }
+      ]
+    }
+  ]
+}

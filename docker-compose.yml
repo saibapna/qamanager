@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ulo_uat
+      POSTGRES_USER: ulo
+      POSTGRES_PASSWORD: ulo_secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/schema-auth.sql:/docker-entrypoint-initdb.d/02-auth.sql:ro
+      - ./db/seed-projects.sql:/docker-entrypoint-initdb.d/03-proj.sql:ro
+      - ./db/seed-users.sql:/docker-entrypoint-initdb.d/04-users.sql:ro
+      - ./db/seed-sirikap-items.sql:/docker-entrypoint-initdb.d/05-sirikap.sql:ro
+      - ./db/seed-simpeg-items.sql:/docker-entrypoint-initdb.d/06-simpeg.sql:ro
+      - ./templates:/app/templates:ro
+    ports: ["5432:5432"]
+
+  api:
+    build: .
+    depends_on: [db]
+    environment:
+      PGHOST: db
+      PGUSER: ulo
+      PGPASSWORD: ulo_secret
+      PGDATABASE: ulo_uat
+      JWT_ACCESS_SECRET: dev-access-secret
+      JWT_REFRESH_SECRET: dev-refresh-secret
+    ports: ["3000:3000"]
+    volumes:
+      - ./output:/app/output
+      - ./public:/app/public
+      - ./templates:/app/templates:ro
+      - ./fixtures:/app/fixtures
+    command: ["node", "src/server.js"]
+    shm_size: 512m
+
+  worker:
+    build: .
+    depends_on: [db]
+    volumes:
+      - ./output:/app/output
+      - ./fixtures:/app/fixtures
+      - ./data:/app/data
+    command: ["shell"]
+    shm_size: 512m
+
+  admin-ui:
+    build:
+      context: ./admin-ui
+      dockerfile: Dockerfile
+    ports: ["5173:5173"]
+    depends_on: [api]
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+volumes:
+  pgdata:

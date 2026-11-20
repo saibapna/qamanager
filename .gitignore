@@ -1,0 +1,10 @@
+node_modules/
+output/
+public/openapi.json
+*.log
+.env
+.DS_Store
+admin-ui/node_modules/
+admin-ui/dist/
+fixtures/*.pdf
+!fixtures/.gitkeep

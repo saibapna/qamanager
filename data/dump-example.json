@@ -1,0 +1,13 @@
+{
+  "skpd": { "nama": "Bappeda Pidie", "kota": "Kabupaten Pidie" },
+  "aplikasi": { "nama_singkat": "SIRIKAP", "nama_panjang": "Sistem Inovasi", "url": "https://sirikap.dev-government.my.id/" },
+  "sesi": { "hari": "Rabu", "tanggal": "2026-11-18", "pukul": "9:00", "tempat": "Daring", "jenis": "ULO" },
+  "penguji": { "nama": "Saipul Bahri, S.Kom", "jabatan": "Penata", "email": "s@a.go.id", "telp": "0823", "nip": "19880511 202521 1 045" },
+  "saksi": { "nama": "", "jabatan": "", "email": "", "telp": "" },
+  "items": [
+    { "no": "D1", "kategori": "A", "kebutuhan": "Dashboard kartu", "hasil": "OK", "status": "PASS" },
+    { "no": "D2", "kategori": "A", "kebutuhan": "Chart", "hasil": "Kosong", "status": "FAIL" },
+    { "no": "X1", "kategori": "L", "kebutuhan": "CRUD", "hasil": "Gagal", "status": "FAIL" }
+  ],
+  "ringkasan": { "total": 3, "lulus": 1, "gagal": 2, "belum": 0, "catatan": "-", "temuan": "-" }
+}

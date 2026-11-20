@@ -1,0 +1,9 @@
+node_modules
+output
+public/openapi.json
+admin-ui/node_modules
+admin-ui/dist
+.git
+.github
+*.pdf
+!fixtures/lampiran.pdf
