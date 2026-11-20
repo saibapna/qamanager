@@ -14,7 +14,7 @@ const fileDownload=(data,mime,name)=>{
     'Cache-Control':'private,no-store','X-Content-Type-Options':'nosniff'
   }});
 };
-export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
+export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publishLive}){
   const role=async(c,pid)=>(await first(c,'SELECT role FROM project_members WHERE user_id=$1 AND project_id=$2',[c.get('uid'),pid]))?.role;
   const draft=async(c,sid)=>{
     const s=await first(c,'SELECT project_id,status,revision FROM ulo_sesi WHERE id=$1',[sid]);
@@ -167,7 +167,8 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
     if(!['PASS','FAIL'].includes(d?.status)||!good(d.note,4000))fail(422,'Status dan catatan retest wajib');
     await q(c,'BEGIN');
     try{
-      await draft(c,sid);
+      const locked=await first(c,'SELECT id,status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      if(locked?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diretest');
       const defect=await first(c,'SELECT item_id,status FROM ulo_defects WHERE sesi_id=$1 AND id=$2 FOR UPDATE',[sid,did]);
       if(!defect||!['FIXED','REOPENED'].includes(defect.status))fail(409,'Defect harus FIXED/REOPENED sebelum retest');
       const out=await first(c,'INSERT INTO ulo_retests(defect_id,actor_id,status,note) VALUES($1,$2,$3,$4) RETURNING *',[did,c.get('uid'),d.status,d.note.trim()]);
@@ -175,8 +176,11 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
       await q(c,'UPDATE ulo_item SET status=$1,hasil=$2 WHERE id=$3',[d.status,d.note.trim(),defect.item_id]);
       await q(c,'UPDATE ulo_defects SET status=$1,updated_at=now() WHERE id=$2',[d.status==='PASS'?'VERIFIED':'REOPENED',did]);
       await q(c,'INSERT INTO ulo_item_events(project_id,sesi_id,item_no,old_status,new_status,old_hasil,new_hasil,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[pid,sid,old.no,old.status,d.status,old.hasil,d.note.trim(),c.get('uid')]);
-      c.set('pid',pid);await audit(c,'DEFECT_RETESTED','defect',did,{result:d.status});
-      await q(c,'COMMIT');return c.json(out,201);
+      const change=await first(c,'UPDATE ulo_sesi SET revision=revision+1 WHERE id=$1 RETURNING revision',[sid]);
+      c.set('pid',pid);await audit(c,'DEFECT_RETESTED','defect',did,{result:d.status,revision:Number(change.revision)});
+      await q(c,'COMMIT');
+      if(publishLive)await publishLive(c,'DEFECT_RETESTED',sid,Number(change.revision));
+      return c.json(out,201);
     }catch(e){await q(c,'ROLLBACK');throw e;}
   });
   app.get('/api/sesi/:sesiId/defects/:defectId/comments',async c=>{
