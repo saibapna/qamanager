@@ -337,10 +337,29 @@ paths:
         '200':
           description: OK
     patch:
-      summary: Update sesi
+      summary: Update metadata sesi DRAFT secara optimistis (wajib expected_revision)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_revision]
+              properties:
+                expected_revision:
+                  type: integer
+                  minimum: 1
+                  description: Revisi terbaru dari GET /sesi/{sesiId}; mencegah lost updates
+                tanggal: {type: string}
+                tempat: {type: string}
+                catatan: {type: string}
       responses:
         '200':
-          description: OK
+          description: Data sesi dengan revision baru
+        '409':
+          description: Revisi telah berubah atau sesi bukan DRAFT
+        '428':
+          description: expected_revision tidak disertakan
   /sesi/{sesiId}/items:
     put:
       parameters:
