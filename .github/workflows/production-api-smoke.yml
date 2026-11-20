@@ -1,0 +1,39 @@
+name: Production API smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-api-smoke.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify Hono health and unauthenticated responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://qamanager.saipulbahri-it.workers.dev"
+          status="$(curl --max-time 30 --retry 3 --retry-delay 2 --silent --show-error -o /tmp/qamanager-status.json -w '%{http_code}' "$base/api/status")"
+          echo "status HTTP $status"
+          cat /tmp/qamanager-status.json
+          test "$status" = "200"
+          jq -e '.ready == true' /tmp/qamanager-status.json
+          health="$(curl --max-time 30 --retry 3 --retry-delay 2 --silent --show-error -o /tmp/qamanager-health.json -w '%{http_code}' "$base/api/health")"
+          echo "health HTTP $health"
+          cat /tmp/qamanager-health.json
+          test "$health" = "200"
+          jq -e '.ok == true and .database == "connected"' /tmp/qamanager-health.json
+          bad_login="$(curl --max-time 30 --silent --show-error -o /tmp/qamanager-login.json -w '%{http_code}' -H 'Content-Type: application/json' --data '{"email":"smoke-nonexistent@example.invalid","password":"invalid"}' "$base/api/auth/login")"
+          echo "invalid login HTTP $bad_login"
+          cat /tmp/qamanager-login.json
+          test "$bad_login" = "401"
+          jq -e '.error == "Kredensial salah"' /tmp/qamanager-login.json
+          unauth="$(curl --max-time 30 --silent --show-error -o /tmp/qamanager-unauth.json -w '%{http_code}' "$base/api/projects")"
+          echo "unauthenticated projects HTTP $unauth"
+          cat /tmp/qamanager-unauth.json
+          test "$unauth" = "401"
+          echo "Production smoke checks passed"
