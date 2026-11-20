@@ -89,6 +89,21 @@ components:
           type: string
         aktif:
           type: boolean
+    PortfolioRow:
+      type: object
+      required: [id, kode, nama, instansi, total_sessions, signed_sessions, total_items, pass_items, fail_items, pending_items, open_defects]
+      properties:
+        id: {type: integer}
+        kode: {type: string}
+        nama: {type: string}
+        instansi: {type: string}
+        total_sessions: {type: integer}
+        signed_sessions: {type: integer}
+        total_items: {type: integer}
+        pass_items: {type: integer}
+        fail_items: {type: integer}
+        pending_items: {type: integer}
+        open_defects: {type: integer}
     Template:
       type: object
       properties:
@@ -157,6 +172,19 @@ paths:
       responses:
         '200':
           description: OK
+  /dashboard/portfolio:
+    get:
+      summary: Portfolio UAT lintas project, hanya project aktif yang memiliki membership pengguna
+      responses:
+        '200':
+          description: Daftar progress setiap project yang diotorisasi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortfolioRow'
+        '401': {description: Belum login}
   /projects:
     get:
       summary: List project
@@ -466,6 +494,17 @@ paths:
       responses:
         '200': {description: Tersimpan}
         '409': {description: Plan telah terkunci}
+  /projects/{projectId}/live-dashboard:
+    get:
+      summary: Progress sesi realtime per project (berbeda dari dashboard operasional)
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Array progress sesi}
+        '403': {description: Akses project ditolak}
   /projects/{projectId}/dashboard:
     get:
       summary: Dashboard jumlah sesi, status item, defect (scoped project)
