@@ -14,7 +14,7 @@ The source is in admin-ui/functions/api/[[path]].js. The SPA worker entrypoint i
 ## Build and deployment
 Run in admin-ui: npm install --no-audit --no-fund; npm run build; npm run build:worker.
 
-The GitHub build workflow publishes a Worker artifact but does NOT automatically deploy. Deploy with all runtime bindings preserved. Verify authenticated workflows on the public staging URL after deployment.
+Pushes to `main` trigger GitHub Actions to build and **automatically deploy** the Hono Worker, provided repository Cloudflare secrets are configured. The deploy script preserves all four production bindings and smoke-tests `/projects` and `/api/status`. For every release, additionally run authenticated UAT workflow tests; build and anonymous health checks alone do not establish production readiness.
 
 ## Migration and workflow
 Apply db/migrations/20261121_master_audit_workflow.sql before deploying this version. The migration preserves existing UAT sessions and output history, adds immutable audit triggers, test_plan_items, item events, defects, retests, evidence, approvals, people and authentication rate-limit counters.
