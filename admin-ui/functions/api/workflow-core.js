@@ -119,3 +119,21 @@ export function validateDefectEdit(previousStatus, memberRole, changes) {
   if (!fields.length) throw new Error('Tidak ada perubahan');
   return fields;
 }
+
+
+/**
+ * Affected mutations and their audit records commit or roll back as one unit.
+ * Each incoming Worker request owns one dedicated PostgreSQL client.
+ * Never call inside a transaction already opened by the route.
+ */
+export async function runAtomic(query, work) {
+  await query('BEGIN');
+  try {
+    const result = await work();
+    await query('COMMIT');
+    return result;
+  } catch (error) {
+    try { await query('ROLLBACK'); } catch { /* preserve the original failure */ }
+    throw error;
+  }
+}
