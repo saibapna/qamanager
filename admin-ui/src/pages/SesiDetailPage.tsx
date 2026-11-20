@@ -23,11 +23,19 @@ export function SesiDetailPage() {
 
   const pdfMut = useMutation({
     mutationFn: () => sesiApi.generatePdf(sid),
-    onSuccess: (blob) => { const url = URL.createObjectURL(blob as Blob); window.open(url,'_blank','noopener,noreferrer'); setTimeout(()=>URL.revokeObjectURL(url),60000); refetchOutputs();toast.push('success', 'PDF generated'); },
+    onSuccess: (blob) => { const url = URL.createObjectURL(blob as Blob); const a = document.createElement('a'); a.href = url; a.download = 'ulo-sesi-' + sid + '.pdf'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),60000); refetchOutputs();toast.push('success', 'PDF berhasil dibuat dan disimpan'); },
     onError: (e: Error) => toast.push('error', e.message)
   });
 
   const finalizeMut=useMutation({mutationFn:()=>sesiApi.finalize(sid),onSuccess:()=>{toast.push('success','Sesi final');refetch();},onError:(e:Error)=>toast.push('error',e.message)});
+  const downloadOutput = async (outputId: number, versi: number) => {
+    try {
+      const blob = await sesiApi.downloadOutput(sid, outputId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'ulo-sesi-' + sid + '-v' + versi + '.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { toast.push('error', e instanceof Error ? e.message : 'Gagal mengunduh PDF'); }
+  };
   if (isLoading || !sesi) return <div>Memuat...</div>;
 
   const ringkasan = working.reduce((a, i) => { a.total++; if (i.status === 'PASS') a.lulus++; else if (i.status === 'FAIL') a.gagal++; else a.belum++; return a; }, { total: 0, lulus: 0, gagal: 0, belum: 0 });
@@ -61,8 +69,11 @@ export function SesiDetailPage() {
         ))}
       </div>
       {outputs.length>0&&<div className="bg-white rounded-xl border p-4 mb-6">
-        <p className="font-semibold text-sm mb-2">PDF output (salin path untuk Validasi/Diff)</p>
-        {outputs.map(o=><p key={o.id} className="text-xs font-mono text-slate-600 break-all">v{o.versi} · {o.pdf_path}</p>)}
+        <p className="font-semibold text-sm mb-2">Riwayat PDF — path dapat digunakan untuk perbandingan fixture</p>
+        {outputs.map(o=><div key={o.id} className="flex items-center justify-between gap-3 py-1">
+          <span className="text-xs font-mono text-slate-600 break-all">v{o.versi} · {o.pdf_path}</span>
+          <button type="button" className="text-xs text-blue-700 hover:underline whitespace-nowrap" onClick={() => downloadOutput(o.id, o.versi)}>Unduh</button>
+        </div>)}
       </div>}
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
