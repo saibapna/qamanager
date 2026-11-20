@@ -84,7 +84,9 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
       }
       await q(c,'DELETE FROM project_members WHERE project_id=$1 AND user_id=$2',[pid,uid]);
       c.set('pid',pid);await audit(c,'PROJECT_MEMBER_REMOVED','project_member',uid);
-      await q(c,'COMMIT');return c.body(null,204);
+      await q(c,'COMMIT');
+       if(publishLive)await publishLive(c,'PROJECT_MEMBER_REMOVED',undefined,undefined,uid);
+       return c.body(null,204);
     }catch(e){await q(c,'ROLLBACK');throw e;}
   });
   app.get('/api/projects/:projectId/people',async c=>{
