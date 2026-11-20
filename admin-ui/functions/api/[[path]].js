@@ -23,8 +23,8 @@ async function passVerify(hash,password){
   const iterations=Number(rounds);
   if(!Number.isInteger(iterations)||iterations<100000||iterations>100000)return false;
   try{
-    // Workerd's WebCrypto PBKDF2 produced an incorrect result in production.
-    // Native node:crypto is supported by Cloudflare Workers with nodejs_compat.
+    // Workerd limits PBKDF2 to 100,000 iterations for both WebCrypto and node:crypto.
+    // The stored credential format is validated before executing native PBKDF2.
     const saltBytes=Buffer.from(salt,'base64url');
     const expectedBytes=Buffer.from(expected,'base64url');
     if(saltBytes.length<16||expectedBytes.length!==32)return false;
@@ -77,13 +77,6 @@ app.get('/api/status',c=>{
   return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:'separate-service-required',missing_bindings:missing},missing.length?503:200);
 });
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
-app.get('/api/health/auth-check',async c=>{
-  // Diagnostic uses synthetic, non-secret credentials. No user password is inspected or returned.
-  const probeHash='pbkdf2_sha256$100000$ZmFrZS10ZXN0LXNhbHQtMTIzNDU2Nzg5$tPhEZAC3SQ-daejWgG6cb0UtgmjLZv8Q4HyS6AqC4L0';
-  const cryptography=await passVerify(probeHash,'QA-Manager-crypto-self-test-2026');
-  const row=await first(c,"SELECT EXISTS(SELECT 1 FROM users WHERE email='admin@qamanager.local' AND aktif=TRUE) AS readable");
-  return c.json({ok:cryptography&&row?.readable===true,crypto_pbkdf2:cryptography,admin_record_visible:row?.readable===true},cryptography&&row?.readable===true?200:503);
-});
 app.post('/api/auth/login',async c=>{
   const d=await json(c);if(!isStr(d?.email)||typeof d.password!=='string')fail(400,'Email dan password wajib');
   const user=await first(c,'SELECT id,email,nama,password_hash,aktif FROM users WHERE lower(email)=lower($1)',[d.email.trim()]);
