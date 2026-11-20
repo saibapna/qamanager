@@ -100,6 +100,7 @@ app.get('/api/status',c=>{
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
 
 app.use('/api/auth/*',async(c,next)=>{
+  if(!['/api/auth/login','/api/auth/refresh'].includes(c.req.path))return next();
   // IP-scoped throttling runs before credential verification, including refresh.
   const ip=c.req.header('cf-connecting-ip')||'unknown';
   const key=await sha('auth-ip:'+ip);
