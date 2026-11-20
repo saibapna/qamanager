@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { FolderKanban, FileCode2, ClipboardList, ShieldCheck, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/store/authStore';
@@ -11,6 +12,7 @@ const links = [
 export function Sidebar() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const signOut=async()=>{const {accessToken,refreshToken}=useAuth.getState();if(accessToken){try{await axios.post('/api/auth/logout',{refreshToken},{headers:{Authorization:'Bearer '+accessToken},timeout:8000});}catch{/* Still clear local session if network is unavailable. */}}logout();nav('/login');};
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-slate-100 p-4 flex flex-col">
       <div className="mb-8">
@@ -36,7 +38,7 @@ export function Sidebar() {
           <p className="font-medium text-slate-200">{user?.nama}</p>
           <p>{user?.email}</p>
         </div>
-        <button onClick={() => { logout(); nav('/login'); }}
+        <button onClick={signOut}
           className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-slate-800 rounded-lg text-red-400">
           <LogOut size={16} /> Logout
         </button>
