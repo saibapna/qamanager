@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
+import {getCookie,setCookie,deleteCookie} from 'hono/cookie';
 import { Client } from 'pg';
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
@@ -60,6 +61,15 @@ app.onError((error,c)=>{
  if(error.code==='23503'||error.code==='23514')return c.json({error:'Validasi atau relasi database gagal'},400);
  console.error('qamanager_hono',error?.message||'error');return c.json({error:'Kesalahan server'},500);
 });
+
+function setAuthCookies(c,accessToken,refreshToken){
+  setCookie(c,'qa_access',accessToken,{httpOnly:true,secure:true,sameSite:'Strict',path:'/api',maxAge:900});
+  setCookie(c,'qa_refresh',refreshToken,{httpOnly:true,secure:true,sameSite:'Strict',path:'/api/auth',maxAge:604800});
+}
+function clearAuthCookies(c){
+  deleteCookie(c,'qa_access',{path:'/api',secure:true});
+  deleteCookie(c,'qa_refresh',{path:'/api/auth',secure:true});
+}
 const missingBindings=c=>[
   ...(!c.env.HYPERDRIVE?.connectionString?['HYPERDRIVE']:[]),
   ...(!c.env.JWT_ACCESS_SECRET?['JWT_ACCESS_SECRET']:[]),
@@ -67,6 +77,14 @@ const missingBindings=c=>[
 ];
 app.use('/api/*',async(c,next)=>{
   c.header('X-Content-Type-Options','nosniff');c.header('Cache-Control','no-store');
+  c.header('Referrer-Policy','no-referrer');
+  if(['POST','PUT','PATCH','DELETE'].includes(c.req.method)){
+    const origin=c.req.header('origin');
+    if(origin){
+      let same=false;try{same=new URL(origin).origin===new URL(c.req.url).origin;}catch{}
+      if(!same)fail(403,'Origin tidak diizinkan');
+    }
+  }
   // Status is public and must remain inspectable before database credentials are configured.
   if(c.req.path==='/api/status')return next();
   const missing=missingBindings(c);
@@ -104,30 +122,36 @@ app.post('/api/auth/login',async c=>{
   const refreshToken=await jwt(c,user,'refresh');
   await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[user.id,await sha(refreshToken),time()+604800]);
   await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
-  return c.json({accessToken:await jwt(c,user,'access'),refreshToken,user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
+  const accessToken=await jwt(c,user,'access');setAuthCookies(c,accessToken,refreshToken);
+  return c.json({accessToken,refreshToken,user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
 });
 app.post('/api/auth/refresh',async c=>{
-  const d=await json(c);let tok;
-  try{tok=await verify(d?.refreshToken,c.env.JWT_REFRESH_SECRET,'HS256');}catch{fail(401,'Refresh token tidak valid');}
+  const d=await json(c);const incoming=d?.refreshToken||getCookie(c,'qa_refresh');let tok;
+  try{tok=await verify(incoming,c.env.JWT_REFRESH_SECRET,'HS256');}catch{fail(401,'Refresh token tidak valid');}
   if(tok.kind!=='refresh')fail(401,'Jenis token tidak valid');
   const uid=id(tok.sub);await q(c,'BEGIN');try{
-    const update=await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2 AND revoked=FALSE AND expires_at>now() RETURNING id',[uid,await sha(d.refreshToken)]);
+    const update=await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2 AND revoked=FALSE AND expires_at>now() RETURNING id',[uid,await sha(incoming)]);
     if(!update.rowCount)fail(401,'Refresh token tidak berlaku');
     const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1 AND aktif=TRUE',[uid]);if(!u)fail(401,'Akun nonaktif');
     const refreshToken=await jwt(c,u,'refresh');await q(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3))',[uid,await sha(refreshToken),time()+604800]);
-    await q(c,'COMMIT');return c.json({accessToken:await jwt(c,u,'access'),refreshToken,user:{...u,projects:await members(c,uid)}});
+    await q(c,'COMMIT');const accessToken=await jwt(c,u,'access');setAuthCookies(c,accessToken,refreshToken);return c.json({accessToken,refreshToken,user:{...u,projects:await members(c,uid)}});
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.use('/api/*',async(c,next)=>{
   if(['/api/health','/api/status','/api/auth/login','/api/auth/refresh'].includes(c.req.path))return next();
-  const h=c.req.header('authorization')||'';if(!h.startsWith('Bearer '))fail(401,'Unauthorized');let claims;
-  try{claims=await verify(h.slice(7),c.env.JWT_ACCESS_SECRET,'HS256');}catch{fail(401,'Token tidak valid');}
+  const h=c.req.header('authorization')||'';const incoming=h.startsWith('Bearer ')?h.slice(7):getCookie(c,'qa_access');if(!incoming)fail(401,'Unauthorized');let claims;
+  try{claims=await verify(incoming,c.env.JWT_ACCESS_SECRET,'HS256');}catch{fail(401,'Token tidak valid');}
   if(claims.kind!=='access')fail(401,'Jenis token tidak valid');
   const uid=id(claims.sub);if(!await first(c,'SELECT id FROM users WHERE id=$1 AND aktif=TRUE',[uid]))fail(401,'Akun tidak aktif');
   c.set('uid',uid);return next();
 });
 app.get('/api/auth/me',async c=>{const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1',[c.get('uid')]);return c.json({...u,projects:await members(c,u.id)});});
-app.post('/api/auth/logout',async c=>{const d=await json(c);if(typeof d?.refreshToken==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(d.refreshToken)]);return c.json({ok:true});});
+app.post('/api/auth/logout',async c=>{
+  const d=await json(c),token=d?.refreshToken||getCookie(c,'qa_refresh');
+  if(typeof token==='string')await q(c,'UPDATE refresh_tokens SET revoked=TRUE WHERE user_id=$1 AND token_hash=$2',[c.get('uid'),await sha(token)]);
+  clearAuthCookies(c);c.set('pid',null);await audit(c,'AUTH_LOGOUT','user',c.get('uid'));
+  return c.json({ok:true});
+});
 app.get('/api/projects',async c=>c.json((await q(c,`SELECT p.* FROM projects p JOIN project_members pm ON pm.project_id=p.id WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[c.get('uid')])).rows));
 app.post('/api/projects',async c=>{if(!await first(c,'SELECT id FROM users WHERE id=$1 AND is_platform_admin=TRUE AND aktif=TRUE',[c.get('uid')]))fail(403,'Hanya platform admin dapat membuat project');const d=await json(c);if(![d?.kode,d?.nama,d?.instansi].every(isStr))fail(400,'Kode, nama, instansi wajib');await q(c,'BEGIN');try{const p=await first(c,'INSERT INTO projects(kode,nama,instansi,bidang) VALUES($1,$2,$3,$4) RETURNING *',[d.kode.trim().toUpperCase(),d.nama.trim(),d.instansi.trim(),d.bidang||null]);await q(c,"INSERT INTO project_members(user_id,project_id,role) VALUES($1,$2,'ADMIN')",[c.get('uid'),p.id]);c.set('pid',p.id);await audit(c,'PROJECT_CREATED','project',p.id);await q(c,'COMMIT');return c.json(p,201);}catch(e){await q(c,'ROLLBACK');throw e;}});
 app.get('/api/projects/:projectId',async c=>{const pid=await guard(c,'projectId');return c.json(await first(c,'SELECT * FROM projects WHERE id=$1',[pid]));});
