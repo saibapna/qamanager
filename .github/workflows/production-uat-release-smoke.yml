@@ -1,0 +1,44 @@
+name: Production UAT release smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-uat-release-smoke.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify deployed Hono API, DB, Browser Run, SPA and unauthorized access
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://qamanager.saipulbahri-it.workers.dev"
+          function check {
+            local method="$1" route="$2" expected="$3"
+            local code
+            code="$(curl --silent --show-error --max-time 35 -o /tmp/response.txt -w '%{http_code}' -X "$method" "$base$route")"
+            echo "$method $route -> HTTP $code"
+            if [ "$code" != "$expected" ]; then head -c 700 /tmp/response.txt; echo; return 1; fi
+          }
+          check GET /api/status 200
+          jq -e '.ready == true and .pdf == "browser-run" and .pdf_storage == "supabase_private_bytea"' /tmp/response.txt
+          check GET /api/health 200
+          jq -e '.ok == true and .database == "connected"' /tmp/response.txt
+          check GET /api/projects 401
+          check GET /api/projects/1/plan 401
+          check GET /api/projects/1/dashboard 401
+          check GET /api/projects/1/members 401
+          check GET /api/sesi/1 401
+          check GET /api/sesi/1/history 401
+          check GET /api/sesi/1/defects 401
+          check GET /api/sesi/1/approvals 401
+          check GET /api/sesi/1/items/1/evidence 401
+          check GET /api/templates/1/fixtures 401
+          check GET /api/auth/me 401
+          check GET /login 200
+          grep -q '<!doctype html>' /tmp/response.txt
+          echo 'Production UAT unauthenticated smoke PASSED'
