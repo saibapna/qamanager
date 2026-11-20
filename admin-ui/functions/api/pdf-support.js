@@ -2,6 +2,7 @@ import { renderSafeHandlebars } from './safe-handlebars.js';
 import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
+import { runAtomic } from './workflow-core.js';
 
 const MAX_FIXTURE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 6 * 1024 * 1024;
@@ -115,10 +116,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     const digest = hashPdf(bytes);
     const path = 'fixtures/template-' + tid + '/' + crypto.randomUUID() + '.pdf';
     const name = String(file.name || 'baseline.pdf').replace(/[^\w .()-]/g, '_').slice(0, 120);
-    const fixture = await first(c,
-      'INSERT INTO template_fixtures(template_id,nama,pdf_path,sha256,pdf_data,size_bytes,page_count) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,template_id,nama,pdf_path,sha256,size_bytes,page_count,created_at',
-      [tid, name, path, digest, Buffer.from(bytes), bytes.length, info.pageCount]);
-    await audit(c, 'FIXTURE_UPLOADED', 'template_fixture', fixture.id, { template_id: tid, size_bytes: bytes.length, sha256: digest });
+    const fixture = await runAtomic(sql => q(c, sql), async () => {
+      const inserted = await first(c,
+        'INSERT INTO template_fixtures(template_id,nama,pdf_path,sha256,pdf_data,size_bytes,page_count) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,template_id,nama,pdf_path,sha256,size_bytes,page_count,created_at',
+        [tid, name, path, digest, Buffer.from(bytes), bytes.length, info.pageCount]);
+      await audit(c, 'FIXTURE_UPLOADED', 'template_fixture', inserted.id, { template_id: tid, size_bytes: bytes.length, sha256: digest });
+      return inserted;
+    });
     return c.json(fixture, 201);
   });
 
