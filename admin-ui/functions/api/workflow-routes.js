@@ -21,6 +21,34 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     if(s?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diubah');
     return s;
   };
+  // Portfolio is always restricted to projects where this specific user is a current member.
+  // LATERAL aggregates prevent joins from multiplying item and defect counts.
+  app.get('/api/dashboard/portfolio',async c=>{
+    const result=await q(c,`SELECT p.id,p.kode,p.nama,p.instansi,
+        sessions.total_sessions,sessions.signed_sessions,
+        items.total_items,items.pass_items,items.fail_items,items.pending_items,
+        defects.open_defects
+      FROM projects p JOIN project_members pm ON pm.project_id=p.id
+      CROSS JOIN LATERAL (
+        SELECT count(*)::int AS total_sessions,
+               count(*) FILTER (WHERE status='SIGNED')::int AS signed_sessions
+        FROM ulo_sesi WHERE project_id=p.id
+      ) sessions
+      CROSS JOIN LATERAL (
+        SELECT count(*)::int AS total_items,
+               count(*) FILTER (WHERE i.status='PASS')::int AS pass_items,
+               count(*) FILTER (WHERE i.status='FAIL')::int AS fail_items,
+               count(*) FILTER (WHERE i.status='BELUM')::int AS pending_items
+        FROM ulo_item i JOIN ulo_sesi s ON s.id=i.sesi_id
+        WHERE s.project_id=p.id
+      ) items
+      CROSS JOIN LATERAL (
+        SELECT count(*)::int AS open_defects FROM ulo_defects d
+        WHERE d.project_id=p.id AND d.status NOT IN('VERIFIED','WAIVED')
+      ) defects
+      WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[c.get('uid')]);
+    return c.json(result.rows);
+  });
   app.get('/api/projects/:projectId/plan',async c=>{
     const pid=await guard(c,'projectId');
     return c.json((await q(c,'SELECT no,kategori,kebutuhan,urutan,gate_required FROM test_plan_items WHERE project_id=$1 ORDER BY urutan',[pid])).rows);
@@ -36,7 +64,10 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     }
     await q(c,'BEGIN');
     try{
-      if(await first(c,'SELECT id FROM ulo_sesi WHERE project_id=$1 LIMIT 1 FOR UPDATE',[pid]))fail(409,'Tidak boleh mengubah test plan setelah ada sesi');
+      // Lock the project even when it has zero sessions. Session creation takes the
+      // same lock before reading the plan, avoiding a first-session race.
+      await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
+      if(await first(c,'SELECT id FROM ulo_sesi WHERE project_id=$1 LIMIT 1',[pid]))fail(409,'Tidak boleh mengubah test plan setelah ada sesi');
       await q(c,'DELETE FROM test_plan_items WHERE project_id=$1',[pid]);
       for(const t of items)await q(c,'INSERT INTO test_plan_items(project_id,no,kategori,kebutuhan,urutan,gate_required) VALUES($1,$2,$3,$4,$5,$6)',[pid,t.no,t.kategori,t.kebutuhan,t.urutan,!!t.gate_required]);
       c.set('pid',pid);await audit(c,'TEST_PLAN_REPLACED','project',pid,{count:items.length});

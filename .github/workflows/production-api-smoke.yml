@@ -41,6 +41,7 @@ jobs:
           for route in \
             /api/live/projects/1/ws \
             /api/projects/1/dashboard \
+            /api/dashboard/portfolio \
             /api/projects/1/live-dashboard \
             /api/projects/1/activity \
             /api/projects/1/members \

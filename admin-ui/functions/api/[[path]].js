@@ -245,19 +245,27 @@ app.post('/api/projects/:projectId/aplikasi',async c=>{const pid=await guard(c,'
 app.get('/api/aplikasi/:aplikasiId/sesi',async c=>{await guard(c,'aplikasiId');return c.json((await q(c,'SELECT * FROM ulo_sesi WHERE aplikasi_id=$1 ORDER BY created_at DESC',[id(c.req.param('aplikasiId'))])).rows);});
 app.post('/api/aplikasi/:aplikasiId/sesi',async c=>{
   const pid=await guard(c,'aplikasiId',canEdit),d=await json(c);
-  const t=await first(c,'SELECT id FROM templates WHERE id=$1 AND project_id=$2 AND published=TRUE',[id(d?.template_id),pid]);
-  if(!t)fail(400,'Template project wajib published');
-  const plan=(await q(c,'SELECT no,kategori,kebutuhan,urutan FROM test_plan_items WHERE project_id=$1 ORDER BY urutan',[pid])).rows;
-  if(!plan.length)fail(422,'Project belum memiliki test plan kanonis; admin harus mengisi test plan terlebih dahulu');
+  const templateId=id(d?.template_id),aplikasiId=id(c.req.param('aplikasiId'));
   const allowed=['hari','tanggal','pukul','tempat','jenis','penguji_nama','penguji_jabatan','penguji_email','penguji_telp','penguji_nip','saksi_nama','saksi_jabatan','saksi_email','saksi_telp','catatan','temuan'];
-  const fields=allowed.filter(k=>d[k]!==undefined),values=[pid,id(c.req.param('aplikasiId')),t.id,...fields.map(k=>d[k])];
+  const fields=allowed.filter(k=>d[k]!==undefined);
   await q(c,'BEGIN');
   try{
+    // The test-plan editor locks this same project row before replacing its items.
+    // Locking before reading the canonical plan yields an atomic session snapshot.
+    await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
+    const t=await first(c,'SELECT id FROM templates WHERE id=$1 AND project_id=$2 AND published=TRUE',[templateId,pid]);
+    if(!t)fail(400,'Template project wajib published');
+    const plan=(await q(c,'SELECT no,kategori,kebutuhan,urutan FROM test_plan_items WHERE project_id=$1 ORDER BY urutan',[pid])).rows;
+    if(!plan.length)fail(422,'Project belum memiliki test plan kanonis; admin harus mengisi test plan terlebih dahulu');
+    const values=[pid,aplikasiId,t.id,...fields.map(k=>d[k])];
     const sql='INSERT INTO ulo_sesi(project_id,aplikasi_id,template_id'+(fields.length?','+fields.join(','):'')+') VALUES('+values.map((_,i)=>'$'+(i+1)).join(',')+') RETURNING *';
     const sesi=await first(c,sql,values);
-    await q(c,"INSERT INTO ulo_item(sesi_id,no,kategori,kebutuhan,status,urutan) SELECT $1,no,kategori,kebutuhan,'BELUM',urutan FROM test_plan_items WHERE project_id=$2",[sesi.id,pid]);
+    const copied=await q(c,"INSERT INTO ulo_item(sesi_id,no,kategori,kebutuhan,status,urutan) SELECT $1,no,kategori,kebutuhan,'BELUM',urutan FROM test_plan_items WHERE project_id=$2",[sesi.id,pid]);
+    if(copied.rowCount!==plan.length)fail(409,'Snapshot sesi tidak cocok dengan test plan kanonis');
     c.set('pid',pid);await audit(c,'SESI_CREATED','sesi',sesi.id,{test_case_count:plan.length});
-    await q(c,'COMMIT');await publishLive(c,'SESI_CREATED',Number(sesi.id),Number(sesi.revision));return c.json({...sesi,item_count:plan.length},201);
+    await q(c,'COMMIT');
+    await publishLive(c,'SESI_CREATED',Number(sesi.id),Number(sesi.revision));
+    return c.json({...sesi,item_count:plan.length},201);
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
 app.get('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),s=await first(c,'SELECT * FROM ulo_sesi WHERE id=$1',[sid]);const items=(await q(c,'SELECT * FROM ulo_item WHERE sesi_id=$1 ORDER BY urutan',[sid])).rows;return c.json({...s,items,ringkasan:{total:items.length,lulus:items.filter(i=>i.status==='PASS').length,gagal:items.filter(i=>i.status==='FAIL').length,belum:items.filter(i=>i.status==='BELUM').length}});});
