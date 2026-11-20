@@ -247,10 +247,13 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
   app.post('/api/sesi/:sesiId/defects/:defectId/comments',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN','TESTER','WITNESS','APPROVER']),sid=id(c.req.param('sesiId')),did=id(c.req.param('defectId')),d=await json(c);
     if(!good(d?.comment,4000))fail(422,'Komentar harus 1–4000 karakter');
-    const exists=await first(c,'SELECT 1 FROM ulo_defects WHERE id=$1 AND sesi_id=$2',[did,sid]);if(!exists)fail(404,'Defect tidak ditemukan');
-    const record=await first(c,'INSERT INTO ulo_defect_comments(defect_id,actor_id,comment) VALUES($1,$2,$3) RETURNING id,actor_id,comment,created_at',[did,c.get('uid'),d.comment.trim()]);
-    c.set('pid',pid);await audit(c,'DEFECT_COMMENTED','defect',did,{comment_id:record.id});
-    return c.json(record,201);
+    return atomic(c,async()=>{
+      const exists=await first(c,'SELECT 1 FROM ulo_defects WHERE id=$1 AND sesi_id=$2',[did,sid]);
+      if(!exists)fail(404,'Defect tidak ditemukan');
+      const record=await first(c,'INSERT INTO ulo_defect_comments(defect_id,actor_id,comment) VALUES($1,$2,$3) RETURNING id,actor_id,comment,created_at',[did,c.get('uid'),d.comment.trim()]);
+      c.set('pid',pid);await audit(c,'DEFECT_COMMENTED','defect',did,{comment_id:record.id});
+      return c.json(record,201);
+    });
   });
   app.post('/api/sesi/:sesiId/reopen',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN']),sid=id(c.req.param('sesiId'));
@@ -302,14 +305,10 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
   });
   app.post('/api/sesi/:sesiId/items/:itemId/evidence',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN','TESTER']),sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId'));
-    await draft(c,sid);
-    if(!await first(c,'SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2',[sid,iid]))fail(404,'Item tidak ditemukan');
     if(!String(c.req.header('content-type')||'').startsWith('multipart/form-data'))fail(415,'Multipart/form-data wajib');
     const form=await c.req.formData().catch(()=>fail(400,'Multipart tidak valid'));
     const file=form.get('file');
     if(!file||typeof file.arrayBuffer!=='function'||!file.size||file.size>4194304)fail(413,'Bukti maksimal 4 MiB');
-    const existing=await first(c,'SELECT count(*)::int AS total FROM ulo_evidence WHERE item_id=$1 AND deleted_at IS NULL',[iid]);
-    if(existing.total>=10)fail(409,'Maksimal 10 bukti aktif per test case');
     const bytes=new Uint8Array(await file.arrayBuffer());let mime;
     if(bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46) mime='application/pdf';
     else if(bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47) mime='image/png';
@@ -317,9 +316,19 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     else fail(415,'Format bukti harus PDF, PNG, atau JPEG');
     const digest=createHash('sha256').update(bytes).digest('hex');
     const name=String(file.name||'evidence').replace(/[^\w.() -]/g,'_').slice(0,180);
-    const row=await first(c,'INSERT INTO ulo_evidence(project_id,sesi_id,item_id,filename,mime,byte_size,sha256,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,filename,mime,byte_size,sha256,created_at',[pid,sid,iid,name,mime,bytes.length,digest,Buffer.from(bytes),c.get('uid')]);
-    c.set('pid',pid);await audit(c,'EVIDENCE_UPLOADED','evidence',row.id,{item_id:iid});
-    return c.json(row,201);
+    return atomic(c,async()=>{
+      // Release the row locks only after both evidence insert and audit commit.
+      // This also prevents concurrent upload #11 and changes after finalization.
+      const session=await first(c,'SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      if(session?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diubah');
+      const item=await first(c,'SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2 FOR UPDATE',[sid,iid]);
+      if(!item)fail(404,'Item tidak ditemukan');
+      const existing=await first(c,'SELECT count(*)::int AS total FROM ulo_evidence WHERE item_id=$1 AND deleted_at IS NULL',[iid]);
+      if(existing.total>=10)fail(409,'Maksimal 10 bukti aktif per test case');
+      const row=await first(c,'INSERT INTO ulo_evidence(project_id,sesi_id,item_id,filename,mime,byte_size,sha256,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,filename,mime,byte_size,sha256,created_at',[pid,sid,iid,name,mime,bytes.length,digest,Buffer.from(bytes),c.get('uid')]);
+      c.set('pid',pid);await audit(c,'EVIDENCE_UPLOADED','evidence',row.id,{item_id:iid});
+      return c.json(row,201);
+    });
   });
   app.get('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId/download',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId')),eid=id(c.req.param('evidenceId'));
@@ -329,8 +338,13 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
   });
   app.delete('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId',async c=>{
     const pid=await guard(c,'sesiId',['ADMIN']),sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId')),eid=id(c.req.param('evidenceId'));
-    await draft(c,sid);
-    if(!await first(c,'UPDATE ulo_evidence SET deleted_at=now(),deleted_by=$1 WHERE sesi_id=$2 AND item_id=$3 AND id=$4 AND deleted_at IS NULL RETURNING id',[c.get('uid'),sid,iid,eid]))fail(404,'Bukti tidak ditemukan');
-    c.set('pid',pid);await audit(c,'EVIDENCE_DELETED','evidence',eid);return c.body(null,204);
+    return atomic(c,async()=>{
+      const session=await first(c,'SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      if(session?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diubah');
+      if(!await first(c,'UPDATE ulo_evidence SET deleted_at=now(),deleted_by=$1 WHERE sesi_id=$2 AND item_id=$3 AND id=$4 AND deleted_at IS NULL RETURNING id',[c.get('uid'),sid,iid,eid]))fail(404,'Bukti tidak ditemukan');
+      c.set('pid',pid);await audit(c,'EVIDENCE_DELETED','evidence',eid);
+      return c.body(null,204);
+    });
   });
+
 }
