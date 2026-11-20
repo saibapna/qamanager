@@ -32,7 +32,7 @@ globalThis.fetch=async(input,options={})=>{
     if(!(options.body instanceof FormData))throw Error('Worker upload must be FormData');
     const metadata=JSON.parse(String(await options.body.get('metadata').text()));
     if(!metadata.bindings?.some(b=>b.name==='PROJECT_LIVE'&&b.class_name==='ProjectLive'))throw Error('Missing ProjectLive binding');
-    if(!metadata.migrations?.new_sqlite_classes?.includes('ProjectLive'))throw Error('Missing durable object migration');
+    if(metadata.migrations?.new_tag!=='qamanager-realtime-v1'||!metadata.migrations?.new_sqlite_classes?.includes('ProjectLive'))throw Error('Missing durable object migration');
     uploaded=true;
     return json({id:'qamanager'});
   }
