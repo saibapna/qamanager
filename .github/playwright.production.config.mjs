@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
-  testDir: '.github/tests',
+  testDir: './tests',
   testMatch: 'production-browser.spec.mjs',
   timeout: 45_000,
   expect: { timeout: 20_000 },
