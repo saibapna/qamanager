@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
 import { Client } from 'pg';
+import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
 const allRoles=['ADMIN','TESTER','WITNESS','APPROVER','AUDITOR'];
@@ -19,16 +20,20 @@ async function passVerify(hash,password){
   if(typeof hash!=='string'||typeof password!=='string'||password.length>200)return false;
   const [method,rounds,salt,expected,...extra]=hash.split('$');
   if(method!=='pbkdf2_sha256'||extra.length||!rounds||!salt||!expected)return false;
-  const iteration=Number(rounds);
-  if(!Number.isInteger(iteration)||iteration<100000||iteration>2000000)return false;
+  const iterations=Number(rounds);
+  if(!Number.isInteger(iterations)||iterations<100000||iterations>2000000)return false;
   try{
-    const saltBytes=Uint8Array.from(base64url(salt),c=>c.charCodeAt(0));
-    const expectedBytes=Uint8Array.from(base64url(expected),c=>c.charCodeAt(0));
+    // Workerd's WebCrypto PBKDF2 produced an incorrect result in production.
+    // Native node:crypto is supported by Cloudflare Workers with nodejs_compat.
+    const saltBytes=Buffer.from(salt,'base64url');
+    const expectedBytes=Buffer.from(expected,'base64url');
     if(saltBytes.length<16||expectedBytes.length!==32)return false;
-    const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
-    const actual=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt:saltBytes,iterations:iteration,hash:'SHA-256'},key,256));
-    let diff=0;for(let i=0;i<32;i++)diff|=actual[i]^expectedBytes[i];return diff===0;
-  }catch(error){console.error('qamanager_password_crypto',error?.name||'Error',error?.message||'unknown');return false;}
+    const actual=pbkdf2Sync(password,saltBytes,iterations,32,'sha256');
+    return timingSafeEqual(actual,expectedBytes);
+  }catch(error){
+    console.error('qamanager_password_crypto',error?.name||'Error',error?.message||'unknown');
+    return false;
+  }
 }
 const jwt=async(c,person,kind)=>sign({sub:String(person.id),kind,iat:time(),exp:time()+(kind==='access'?900:604800),...(kind==='refresh'?{jti:crypto.randomUUID()}:{})},kind==='access'?c.env.JWT_ACCESS_SECRET:c.env.JWT_REFRESH_SECRET,'HS256');
 const members=async(c,uid)=>(await q(c,`SELECT pm.project_id,p.kode,p.nama,pm.role FROM project_members pm JOIN projects p ON p.id=pm.project_id WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[uid])).rows;
