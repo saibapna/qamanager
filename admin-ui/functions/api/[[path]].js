@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
 import { Client } from 'pg';
+import { installPdfRoutes } from './pdf-support.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
@@ -74,7 +75,7 @@ app.use('/api/*',async(c,next)=>{
 });
 app.get('/api/status',c=>{
   const missing=missingBindings(c);
-  return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:'separate-service-required',missing_bindings:missing},missing.length?503:200);
+  return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:c.env.BROWSER?.quickAction?'browser-run':'browser-binding-missing',pdf_storage:'supabase_private_bytea',pdf_comparison:'sha256_exact_bytes',missing_bindings:missing},missing.length?503:200);
 });
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
 app.post('/api/auth/login',async c=>{
@@ -126,8 +127,6 @@ app.patch('/api/sesi/:sesiId',async c=>{await guard(c,'sesiId',canEdit);const d=
 app.put('/api/sesi/:sesiId/items',async c=>{await guard(c,'sesiId',canEdit);const sid=id(c.req.param('sesiId')),d=await json(c),items=d?.items;if(!Array.isArray(items)||!items.length||items.length>1000)fail(400,'items wajib 1-1000');const ids=new Set(),orders=new Set();for(const it of items){if(!isStr(it?.no)||!isStr(it?.kategori)||!isStr(it?.kebutuhan)||!['PASS','FAIL','BELUM'].includes(it?.status)||!Number.isInteger(it?.urutan)||it.urutan<1||ids.has(it.no)||orders.has(it.urutan))fail(400,'Item tidak valid atau duplikat');ids.add(it.no);orders.add(it.urutan);}await q(c,'BEGIN');try{const s=await first(c,'SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);if(s?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diubah');await q(c,'DELETE FROM ulo_item WHERE sesi_id=$1',[sid]);for(const it of items)await q(c,'INSERT INTO ulo_item(sesi_id,no,kategori,kebutuhan,hasil,status,urutan) VALUES($1,$2,$3,$4,$5,$6,$7)',[sid,it.no,it.kategori,it.kebutuhan,it.hasil??null,it.status,it.urutan]);await audit(c,'ITEMS_REPLACED','sesi',sid,{count:items.length});await q(c,'COMMIT');return c.json({ok:true,count:items.length});}catch(e){await q(c,'ROLLBACK');throw e;}});
 app.get('/api/sesi/:sesiId/outputs',async c=>{await guard(c,'sesiId');return c.json((await q(c,'SELECT id,versi,pdf_path,sha256,size_bytes,page_count,generated_at FROM ulo_output WHERE sesi_id=$1 ORDER BY versi DESC',[id(c.req.param('sesiId'))])).rows);});
 app.post('/api/sesi/:sesiId/finalize',async c=>{await guard(c,'sesiId',['ADMIN','APPROVER']);const sid=id(c.req.param('sesiId'));await q(c,'BEGIN');try{const s=await first(c,'SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);if(s?.status!=='DRAFT')fail(409,'Hanya DRAFT yang dapat difinalisasi');const items=(await q(c,'SELECT no,status FROM ulo_item WHERE sesi_id=$1',[sid])).rows;if(!items.length||items.some(i=>i.status==='BELUM'))fail(422,'Semua item wajib diuji');const gates=['X1','X2','X3','X4','X5'];if(items.some(i=>gates.includes(i.no))&&gates.some(n=>items.find(i=>i.no===n)?.status!=='PASS'))fail(422,'Gate X1-X5 wajib PASS');const result=await first(c,"UPDATE ulo_sesi SET status='FINAL' WHERE id=$1 RETURNING *",[sid]);await audit(c,'SESI_FINALIZED','sesi',sid);await q(c,'COMMIT');return c.json(result);}catch(e){await q(c,'ROLLBACK');throw e;}});
-for(const action of ['/api/sesi/:sesiId/pdf'])app.post(action,async c=>{await guard(c,'sesiId',canEdit);return c.json({error:'PDF memerlukan service Chromium terpisah'},501);});
-for(const action of ['/api/templates/:templateId/fixtures','/api/templates/:templateId/validate','/api/templates/:templateId/diff'])app.post(action,async c=>{await guard(c,'templateId');return c.json({error:'Fitur PDF/fixture belum tersedia di Cloudflare'},501);});
-app.get('/api/diff-file/:templateId/:runId/:folder/:filename',async c=>{await guard(c,'templateId');return c.json({error:'PDF diff tidak tersedia'},501);});
+installPdfRoutes(app,{q,first,guard,id,fail,audit});
 export async function onRequest(ctx){return app.fetch(ctx.request,ctx.env,ctx);}
 export {app};
