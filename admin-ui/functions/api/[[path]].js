@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { sign, verify } from 'hono/jwt';
 import {getCookie,setCookie,deleteCookie} from 'hono/cookie';
-import { Client } from 'pg';
+import { Client, types } from 'pg';
+// pg maps PostgreSQL BIGINT (OID 20) to string by default; UI must receive safe numeric IDs.
+types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
 import { assertCanonicalItems, checkFinalization } from './workflow-core.js';
