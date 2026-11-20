@@ -4,6 +4,7 @@ import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { UatWorkflowPanel } from '@/components/UatWorkflowPanel';
 import { useAuth } from '@/store/authStore';
+import { useProjectLive } from '@/lib/useProjectLive';
 import { sesiApi, Item } from '@/api/sesi';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -17,10 +18,14 @@ export function SesiDetailPage() {
   const [page,setPage] = useState(1);
   const pageSize=20;
   const user = useAuth(s=>s.user);
-  const { data: sesi, isLoading, refetch } = useQuery({ queryKey: ['sesi', sid], queryFn: () => sesiApi.get(sid) });
+  const { data: sesi, isLoading, refetch } = useQuery({ queryKey: ['sesi', sid], queryFn: () => sesiApi.get(sid), refetchInterval: 15000 });
+  const { connected, online } = useProjectLive(Number(sesi?.project_id || 0), sid);
+  const [draftRevision, setDraftRevision] = useState<number | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [items, setItems] = useState<Item[] | null>(null);
   const {data:outputs=[],refetch:refetchOutputs}=useQuery({queryKey:['outputs',sid],queryFn:()=>sesiApi.outputs(sid)});
   const working = items ?? sesi?.items ?? [];
+  const staleDraft = items !== null && draftRevision !== null && sesi !== undefined && draftRevision !== Number(sesi.revision??0);
   const role = user?.projects.find(p=>p.project_id === sesi?.project_id)?.role;
   const canEdit = ['ADMIN','TESTER'].includes(role||'');
   const visibleItems = working.map((it,idx)=>({...it,idx})).filter(it => (statusFilter==='ALL'||it.status===statusFilter) && (!search.trim() || [it.no,it.kebutuhan,it.hasil].some(t=>String(t||'').toLowerCase().includes(search.toLowerCase()))));
@@ -29,9 +34,9 @@ export function SesiDetailPage() {
   const currentItems=visibleItems.slice((safePage-1)*pageSize,safePage*pageSize);
 
   const saveMut = useMutation({
-    mutationFn: () => sesiApi.updateItems(sid, working),
-    onSuccess: () => { toast.push('success', 'Tersimpan'); setItems(null); refetch(); },
-    onError: (e: Error) => toast.push('error', e.message)
+    mutationFn: () => sesiApi.updateItems(sid, working, draftRevision ?? Number(sesi?.revision ?? -1)),
+    onSuccess: () => { toast.push('success', 'Tersimpan'); setItems(null); setDraftRevision(null); setConflict(false); refetch(); },
+    onError: (e: Error) => { if (e.message.includes('diubah pengguna lain') || e.message.includes('409')) setConflict(true); toast.push('error', e.message); }
   });
 
   const pdfMut = useMutation({
@@ -55,7 +60,7 @@ export function SesiDetailPage() {
   const ringkasan = working.reduce((a, i) => { a.total++; if (i.status === 'PASS') a.lulus++; else if (i.status === 'FAIL') a.gagal++; else a.belum++; return a; }, { total: 0, lulus: 0, gagal: 0, belum: 0 });
 
   const update = (idx: number, patch: Partial<Item>) => {
-    const next = [...working]; next[idx] = { ...next[idx], ...patch }; setItems(next);
+    const next = [...working]; next[idx] = { ...next[idx], ...patch }; if(items===null) setDraftRevision(Number(sesi.revision??0)); setItems(next);
   };
 
   return (
@@ -63,7 +68,7 @@ export function SesiDetailPage() {
       <PageHeader title={`Sesi #${sesi.id}`} subtitle={`Status: ${sesi.status}`}
         actions={
           <>
-            <button onClick={() => saveMut.mutate()} disabled={!items || sesi.status !== 'DRAFT' || !canEdit}
+            <button onClick={() => saveMut.mutate()} disabled={!items || staleDraft || conflict || saveMut.isPending || sesi.status !== 'DRAFT' || !canEdit}
               className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50">
               <Save size={16} /> Simpan
             </button>
@@ -75,6 +80,8 @@ export function SesiDetailPage() {
             </button>}
           </>
         } />
+      <div className="mb-3 text-xs text-slate-600">{connected ? '● Real-time tersambung' : '● Sinkronisasi berkala 15 detik'}{connected && <span className="ml-3">{online.filter(u=>u.sessionId===sid).length} pengguna di sesi ini</span>}</div>
+      {(staleDraft || conflict) && <div role="alert" className="mb-3 rounded border border-amber-400 bg-amber-50 p-3 text-sm">Sesi berubah di pengguna lain. Draft Anda tidak ditimpa. <button type="button" className="ml-2 underline" onClick={()=>{setItems(null);setDraftRevision(null);setConflict(false);void refetch();}}>Buang draft dan muat ulang</button></div>}
       {sesi.status==='FINAL'&&!sesi.finalized_at&&<p role="alert" className="mb-4 rounded border border-amber-400 p-3 text-sm text-amber-900">Sesi FINAL dari versi lama belum lulus pemeriksaan workflow. ADMIN harus buka ulang, lengkapi defect/retest, lalu finalisasi ulang sebelum proses persetujuan.</p>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[["Total", ringkasan.total], ["Lulus", ringkasan.lulus], ["Gagal", ringkasan.gagal], ["Belum", ringkasan.belum]].map(([l, v]) => (
