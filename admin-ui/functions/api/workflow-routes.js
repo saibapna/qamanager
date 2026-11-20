@@ -1,6 +1,6 @@
 
 import {createHash} from 'node:crypto';
-import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState,validateDefectEdit} from './workflow-core.js';
+import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState,validateDefectEdit,runAtomic} from './workflow-core.js';
 
 const good=(v,max=255)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
 const optional=v=>typeof v==='string'?v.trim():null;
@@ -15,6 +15,7 @@ const fileDownload=(data,mime,name)=>{
   }});
 };
 export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publishLive}){
+  const atomic=(c,work)=>runAtomic(sql=>q(c,sql),work);
   const role=async(c,pid)=>(await first(c,'SELECT role FROM project_members WHERE user_id=$1 AND project_id=$2',[c.get('uid'),pid]))?.role;
   const draft=async(c,sid)=>{
     const s=await first(c,'SELECT project_id,status,revision FROM ulo_sesi WHERE id=$1',[sid]);
@@ -127,31 +128,44 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
   app.post('/api/projects/:projectId/people',async c=>{
     const pid=await guard(c,'projectId',['ADMIN','TESTER']),d=await json(c);
     if(!['PENGUJI','SAKSI'].includes(d?.kind)||!good(d?.nama))fail(422,'Jenis dan nama wajib');
-    const row=await first(c,'INSERT INTO project_people(project_id,kind,nama,jabatan,email,telepon,nip) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[pid,d.kind,d.nama.trim(),optional(d.jabatan),optional(d.email),optional(d.telepon),optional(d.nip)]);
-    c.set('pid',pid);await audit(c,'PROJECT_PERSON_CREATED','project_person',row.id);
-    return c.json(row,201);
+    return atomic(c,async()=>{
+      const row=await first(c,'INSERT INTO project_people(project_id,kind,nama,jabatan,email,telepon,nip) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[pid,d.kind,d.nama.trim(),optional(d.jabatan),optional(d.email),optional(d.telepon),optional(d.nip)]);
+      c.set('pid',pid);await audit(c,'PROJECT_PERSON_CREATED','project_person',row.id);
+      return c.json(row,201);
+    });
   });
   app.patch('/api/projects/:projectId/people/:personId',async c=>{
     const pid=await guard(c,'projectId',['ADMIN','TESTER']),who=id(c.req.param('personId')),d=await json(c);
     const keys=['kind','nama','jabatan','email','telepon','nip','aktif'].filter(k=>d?.[k]!==undefined);
     if(!keys.length||(d.kind!==undefined&&!['PENGUJI','SAKSI'].includes(d.kind))||(d.nama!==undefined&&!good(d.nama)))fail(422,'Perubahan tidak valid');
-    const result=await first(c,'UPDATE project_people SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+(keys.length+1)+' AND project_id=$'+(keys.length+2)+' RETURNING *',[...keys.map(k=>d[k]),who,pid]);
-    if(!result)fail(404,'Orang tidak ditemukan');
-    c.set('pid',pid);await audit(c,'PROJECT_PERSON_UPDATED','project_person',who);
-    return c.json(result);
+    return atomic(c,async()=>{
+      const result=await first(c,'UPDATE project_people SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+(keys.length+1)+' AND project_id=$'+(keys.length+2)+' RETURNING *',[...keys.map(k=>d[k]),who,pid]);
+      if(!result)fail(404,'Orang tidak ditemukan');
+      c.set('pid',pid);await audit(c,'PROJECT_PERSON_UPDATED','project_person',who);
+      return c.json(result);
+    });
   });
   app.patch('/api/aplikasi/:aplikasiId',async c=>{
     const pid=await guard(c,'aplikasiId',['ADMIN','TESTER']),aid=id(c.req.param('aplikasiId')),d=await json(c);
     const keys=['nama_singkat','nama_panjang','url'].filter(k=>d?.[k]!==undefined);
     if(!keys.length||(d.nama_singkat!==undefined&&!good(d.nama_singkat,100)))fail(422,'Perubahan aplikasi invalid');
-    const row=await first(c,'UPDATE aplikasi SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+(keys.length+1)+' AND project_id=$'+(keys.length+2)+' RETURNING *',[...keys.map(k=>d[k]),aid,pid]);
-    c.set('pid',pid);await audit(c,'APLIKASI_UPDATED','aplikasi',aid);return c.json(row);
+    return atomic(c,async()=>{
+      const row=await first(c,'UPDATE aplikasi SET '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' WHERE id=$'+(keys.length+1)+' AND project_id=$'+(keys.length+2)+' RETURNING *',[...keys.map(k=>d[k]),aid,pid]);
+      if(!row)fail(404,'Aplikasi tidak ditemukan');
+      c.set('pid',pid);await audit(c,'APLIKASI_UPDATED','aplikasi',aid);
+      return c.json(row);
+    });
   });
   app.delete('/api/aplikasi/:aplikasiId',async c=>{
     const pid=await guard(c,'aplikasiId',['ADMIN']),aid=id(c.req.param('aplikasiId'));
-    if(await first(c,'SELECT id FROM ulo_sesi WHERE aplikasi_id=$1 LIMIT 1',[aid]))fail(409,'Aplikasi memiliki sesi UAT');
-    await q(c,'DELETE FROM aplikasi WHERE id=$1 AND project_id=$2',[aid,pid]);
-    c.set('pid',pid);await audit(c,'APLIKASI_DELETED','aplikasi',aid);return c.body(null,204);
+    return atomic(c,async()=>{
+      const application=await first(c,'SELECT id FROM aplikasi WHERE id=$1 AND project_id=$2 FOR UPDATE',[aid,pid]);
+      if(!application)fail(404,'Aplikasi tidak ditemukan');
+      if(await first(c,'SELECT id FROM ulo_sesi WHERE aplikasi_id=$1 LIMIT 1',[aid]))fail(409,'Aplikasi memiliki sesi UAT');
+      await q(c,'DELETE FROM aplikasi WHERE id=$1 AND project_id=$2',[aid,pid]);
+      c.set('pid',pid);await audit(c,'APLIKASI_DELETED','aplikasi',aid);
+      return c.body(null,204);
+    });
   });
   app.get('/api/projects/:projectId/dashboard',async c=>{
     const pid=await guard(c,'projectId');
