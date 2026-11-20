@@ -1,43 +1,33 @@
-# ULO/UAT Manager — Cloudflare staging deployment
+# Cloudflare Hono Runtime — QA Manager
 
-Live staging: https://qamanager.saipulbahri-it.workers.dev
+A single Cloudflare Worker serves the React SPA and the Hono API. The old Express server is for local/legacy use only.
 
-- worker/index.ts routes /api/* to functions/api/[[path]].js and serves the React SPA.
-- functions/api/workflow-routes.js handles RBAC, plan catalog, membership, defects, retest, evidence, internal approvals, audit and dashboard.
-- functions/api/pdf-support.js renders PDF using Cloudflare Browser Run and privately stores PDF bytes in Supabase PostgreSQL.
-- Supabase project kyzrhgfynbtlmzfwvdyg uses private schema ulo_uat.
-- Hyperdrive qamanager-supabase is bound as HYPERDRIVE; Browser Run is bound as BROWSER.
-- JWT signing secrets stay server-only. Never publish credentials.
+## Required bindings
+- HYPERDRIVE — database connection to the private Supabase ulo_uat schema.
+- JWT_ACCESS_SECRET — server-only access-token secret.
+- JWT_REFRESH_SECRET — independent server-only refresh-token secret.
+- BROWSER — Cloudflare Browser Run binding for PDF generation.
+- nodejs_compat — required by node:crypto and the PostgreSQL client.
 
-## Scope and limitations
+The source is in admin-ui/functions/api/[[path]].js. The SPA worker entrypoint is admin-ui/worker/index.ts.
 
-**Staging — not certified production.** SIRIKAP and SIMPEG have 71 canonical test cases each. New UAT sessions copy the full plan. Changing a case writes append-only events; FAIL creates a defect. Retest or recorded waiver is required before finalization. Two different accounts acting as WITNESS and APPROVER complete an internal approval workflow.
+## Build and deployment
+Run in admin-ui: npm install --no-audit --no-fund; npm run build; npm run build:worker.
 
-The SIGNED state represents an **internal approval attestation**, not a legally qualified digital signature. A real PKI provider, certificate validation and organization sign-off are still outstanding in issue #4.
+The GitHub build workflow publishes a Worker artifact but does NOT automatically deploy. Deploy with all runtime bindings preserved. Verify authenticated workflows on the public staging URL after deployment.
 
-PDF output via Browser Run is limited to 6 MiB per file, 20 versions per session. Fixture upload is limited to 5 MiB. Both are stored as private PostgreSQL bytea values while R2 is not enabled. PDF validation currently uses **SHA-256 exact bytes**, not SSIM or pixel-level fidelity. The official baseline fixture is not part of the repo. Do not claim 1:1 visual compliance.
+## Migration and workflow
+Apply db/migrations/20261121_master_audit_workflow.sql before deploying this version. The migration preserves existing UAT sessions and output history, adds immutable audit triggers, test_plan_items, item events, defects, retests, evidence, approvals, people and authentication rate-limit counters.
 
-## Build and deploy
+Project administrators manage the canonical test plan. Once the project has sessions, the plan is immutable through the API. New sessions copy the entire plan. PDF/fixtures/evidence are stored as bounded private bytea for staging; object storage and lifecycle policy are still required for larger production volumes.
 
-Build with Node.js 22:
+## Security
+- Login uses password PBKDF2-SHA256 at 100000 iterations, compatible with Cloudflare Workers.
+- Browser tokens use Secure HttpOnly SameSite=Strict cookies; client authentication state is memory-only.
+- Refresh tokens are rotated and server logout revokes the refresh token.
+- Cross-origin state-changing requests are blocked.
+- Rate limiting is backed by PostgreSQL hashed IP/account keys.
+- Authorization resolves tenant membership and role on the server.
 
-    cd admin-ui
-    npm install --no-audit --no-fund
-    npm run build
-    npm run build:worker
-
-GitHub Actions workflow build-cloudflare-worker.yml produces the qamanager-hono-worker artifact. **A successful build is not a deployment.** A deployment needs HYPERDRIVE, BROWSER, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET bindings; compatibility flag nodejs_compat; and tested status, health and auth endpoints.
-
-## Database migrations
-
-Do not rerun initial bootstrap against an existing staging database. Apply reviewed additive migrations, especially db/migrations/20261121_master_audit_workflow.sql. It adds platform-admin permissions, project test plan catalog, defect lifecycle, retests, evidence, approvals, audit immutability, auth throttling, and missing FK indexes without rewriting existing sessions.
-
-## Authentication
-
-Cloudflare Worker password hashes use PBKDF2-SHA256 with exactly 100,000 iterations due the deployed Workers runtime limit. The old Express backend uses Argon2 and is **not compatible** with Worker account provisioning. Cloudflare sets HttpOnly/Secure/SameSite=Strict cookies; client-side JWT persistence is not allowed. Logout revokes refresh tokens.
-
-## Verification / Definition of Done
-
-Follow https://github.com/saibapna/qamanager/issues/4. Completion requires passing unit tests, TypeScript build, production login/logout/refresh, cross-tenant access checks, 71-item session creation, finalization negative tests, evidence/defect/retest/approval workflow, and PDF/fixture binary roundtrip. Actual official pixel fidelity and qualified signatures require external baseline/provider proof.
-
-Do not mark an item complete only because an API route exists.
+## Release blockers
+See GitHub issue #4. Qualified PKI signatures, official visual PDF fixture SSIM/heatmap validation, production file storage/backup/restore drill and CI/CD verification are not implied by a passing build or health check.
