@@ -1,18 +1,43 @@
-# Cloudflare deployment - Hono + React
+# ULO/UAT Manager — Cloudflare staging deployment
 
-The `worker/index.ts` Worker serves the Vite-built React SPA and routes `/api/*` to the Hono application in `functions/api/[[path]].js`. Its Vite assets are embedded into the compiled Worker by `scripts/inline-worker-assets.mjs`. The `build:worker` command requires a successful frontend `npm run build` first. This is a deployment bridge while Cloudflare GitHub/Pages integration is unavailable; use Workers Static Assets for a larger production frontend.
+Live staging: https://qamanager.saipulbahri-it.workers.dev
 
-Build on a Node.js 22 machine with npm registry access:
+- worker/index.ts routes /api/* to functions/api/[[path]].js and serves the React SPA.
+- functions/api/workflow-routes.js handles RBAC, plan catalog, membership, defects, retest, evidence, internal approvals, audit and dashboard.
+- functions/api/pdf-support.js renders PDF using Cloudflare Browser Run and privately stores PDF bytes in Supabase PostgreSQL.
+- Supabase project kyzrhgfynbtlmzfwvdyg uses private schema ulo_uat.
+- Hyperdrive qamanager-supabase is bound as HYPERDRIVE; Browser Run is bound as BROWSER.
+- JWT signing secrets stay server-only. Never publish credentials.
 
-```bash
-cd admin-ui
-npm install
-npm run build
-npm run build:worker
-```
+## Scope and limitations
 
-The GitHub Actions workflow `build-cloudflare-worker.yml` builds and uploads the Worker bundle as an artifact. Deploy it with Cloudflare Workers, Node.js compatibility (`nodejs_compat`, compatibility date `2026-11-20`), and **server-only bindings** `HYPERDRIVE`, `JWT_ACCESS_SECRET`, and `JWT_REFRESH_SECRET`. The Hyperdrive config must point to a database login whose access is restricted to the private `ulo_uat` schema. Never put database credentials or signing keys in source or Vite `VITE_*` variables.
+**Staging — not certified production.** SIRIKAP and SIMPEG have 71 canonical test cases each. New UAT sessions copy the full plan. Changing a case writes append-only events; FAIL creates a defect. Retest or recorded waiver is required before finalization. Two different accounts acting as WITNESS and APPROVER complete an internal approval workflow.
 
-The database schema currently has no interactive admin account. Provision users securely server-side. The Hono API supports core ULO operations but its Cloudflare runtime has **not** passed end-to-end test. The old Express/Puppeteer/Python PDF service is intentionally not deployed; PDF, fixture, and diff routes return 501.
+The SIGNED state represents an **internal approval attestation**, not a legally qualified digital signature. A real PKI provider, certificate validation and organization sign-off are still outstanding in issue #4.
 
-Important: browser code and all Worker routes must use HTTPS. Before claiming production readiness: install a first admin account, smoke-test login/refresh, verify per-project authorization, test transactions, and configure Cloudflare rate limits, observability, and monitoring. The staging code does not promise 1:1 PDF fidelity.
+PDF output via Browser Run is limited to 6 MiB per file, 20 versions per session. Fixture upload is limited to 5 MiB. Both are stored as private PostgreSQL bytea values while R2 is not enabled. PDF validation currently uses **SHA-256 exact bytes**, not SSIM or pixel-level fidelity. The official baseline fixture is not part of the repo. Do not claim 1:1 visual compliance.
+
+## Build and deploy
+
+Build with Node.js 22:
+
+    cd admin-ui
+    npm install --no-audit --no-fund
+    npm run build
+    npm run build:worker
+
+GitHub Actions workflow build-cloudflare-worker.yml produces the qamanager-hono-worker artifact. **A successful build is not a deployment.** A deployment needs HYPERDRIVE, BROWSER, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET bindings; compatibility flag nodejs_compat; and tested status, health and auth endpoints.
+
+## Database migrations
+
+Do not rerun initial bootstrap against an existing staging database. Apply reviewed additive migrations, especially db/migrations/20261121_master_audit_workflow.sql. It adds platform-admin permissions, project test plan catalog, defect lifecycle, retests, evidence, approvals, audit immutability, auth throttling, and missing FK indexes without rewriting existing sessions.
+
+## Authentication
+
+Cloudflare Worker password hashes use PBKDF2-SHA256 with exactly 100,000 iterations due the deployed Workers runtime limit. The old Express backend uses Argon2 and is **not compatible** with Worker account provisioning. Cloudflare sets HttpOnly/Secure/SameSite=Strict cookies; client-side JWT persistence is not allowed. Logout revokes refresh tokens.
+
+## Verification / Definition of Done
+
+Follow https://github.com/saibapna/qamanager/issues/4. Completion requires passing unit tests, TypeScript build, production login/logout/refresh, cross-tenant access checks, 71-item session creation, finalization negative tests, evidence/defect/retest/approval workflow, and PDF/fixture binary roundtrip. Actual official pixel fidelity and qualified signatures require external baseline/provider proof.
+
+Do not mark an item complete only because an API route exists.
