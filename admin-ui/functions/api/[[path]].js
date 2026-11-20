@@ -126,12 +126,17 @@ app.post('/api/auth/login',async c=>{
     await q(c,"INSERT INTO auth_attempts(key_hash,attempts,window_started_at,updated_at) VALUES($1,1,now(),now()) ON CONFLICT(key_hash) DO UPDATE SET attempts=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN 1 ELSE auth_attempts.attempts+1 END,window_started_at=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN now() ELSE auth_attempts.window_started_at END,updated_at=now()",[attemptKey]);
     fail(401,'Kredensial salah');
   }
-  await q(c,'DELETE FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
+  const projects=await members(c,user.id);
   const refreshToken=await jwt(c,user,'refresh');
-  const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[user.id,await sha(refreshToken),time()+604800]);
-  await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
+  const refreshHash=await sha(refreshToken);
+  const session=await atomic(c,async()=>{
+    await q(c,'DELETE FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
+    const created=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[user.id,refreshHash,time()+604800]);
+    await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_LOGIN','user',$1,'{}'::jsonb)",[user.id]);
+    return created;
+  });
   const accessToken=await jwt(c,user,'access',session.id);setAuthCookies(c,accessToken,refreshToken);
-  return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects:await members(c,user.id)}});
+  return c.json({user:{id:user.id,email:user.email,nama:user.nama,is_platform_admin:user.is_platform_admin,projects}});
 });
 app.post('/api/auth/refresh',async c=>{
   const d=await json(c);const incoming=d?.refreshToken||getCookie(c,'qa_refresh');let tok;
@@ -143,6 +148,7 @@ app.post('/api/auth/refresh',async c=>{
     const u=await first(c,'SELECT id,email,nama,is_platform_admin FROM users WHERE id=$1 AND aktif=TRUE',[uid]);if(!u)fail(401,'Akun nonaktif');
     const refreshToken=await jwt(c,u,'refresh');
     const session=await first(c,'INSERT INTO refresh_tokens(user_id,token_hash,expires_at) VALUES($1,$2,to_timestamp($3)) RETURNING id',[uid,await sha(refreshToken),time()+604800]);
+    await q(c,"INSERT INTO audit_events(project_id,actor_id,action,entity_type,entity_id,metadata) VALUES(NULL,$1,'AUTH_REFRESH','user',$1,'{}'::jsonb)",[uid]);
     await q(c,'COMMIT');const accessToken=await jwt(c,u,'access',session.id);setAuthCookies(c,accessToken,refreshToken);return c.json({user:{...u,projects:await members(c,uid)}});
   }catch(e){await q(c,'ROLLBACK');throw e;}
 });
