@@ -40,7 +40,7 @@ export function ProjectDetailPage(){
   if(!project)return <div>Memuat...</div>;
   const published=templates.find(t=>t.published);
   return <>
-    <PageHeader title={project.nama} subtitle={`${project.kode} • ${project.instansi}`}/>
+    <PageHeader title={project.nama} subtitle={`${project.kode} • ${project.instansi}`} actions={<Link to={`/projects/${pid}/manage`} className="px-3 py-2 bg-blue-700 text-white rounded text-sm">Kelola Project</Link>}/>
     <div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-white rounded-xl border p-4"><FileCode2 className="text-brand-600 mb-2"/><p className="text-2xl font-bold">{templates.length}</p><p className="text-xs text-slate-500">Template</p></div>
     <div className="bg-white rounded-xl border p-4"><ClipboardList className="text-brand-600 mb-2"/><p className="text-2xl font-bold">{apps.length}</p><p className="text-xs text-slate-500">Aplikasi</p></div></div>
     <h3 className="font-semibold mb-3">Templates</h3>

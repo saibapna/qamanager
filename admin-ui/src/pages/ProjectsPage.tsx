@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '@/store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, ExternalLink } from 'lucide-react';
@@ -11,6 +12,7 @@ import { useToast } from '@/components/Toast';
 
 export function ProjectsPage() {
   const nav = useNavigate();
+  const isPlatformAdmin=useAuth(s=>!!s.user?.is_platform_admin);
   const qc = useQueryClient();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -33,10 +35,10 @@ export function ProjectsPage() {
   return (
     <>
       <PageHeader title="Projects" subtitle="Kelola project ULO/UAT"
-        actions={<button onClick={() => setOpen(true)}
+        actions={isPlatformAdmin?<button onClick={() => setOpen(true)}
           className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700">
           <Plus size={16} /> Project Baru
-        </button>} />
+        </button>:undefined} />
       <div className="bg-white rounded-xl border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b">

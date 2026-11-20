@@ -2,8 +2,9 @@ openapi: 3.1.0
 info:
   title: ULO/UAT Manager API
   version: 1.0.0
-  description: Multi-project ULO/UAT API dengan output PDF 1=1.
+  description: Cloudflare Hono ULO/UAT staging API; PDF perbandingan SHA-256, bukan visual SSIM.
 servers:
+- url: https://qamanager.saipulbahri-it.workers.dev/api
 - url: http://localhost:3000/api
 tags:
 - name: Auth
@@ -13,13 +14,19 @@ tags:
 - name: Sesi
 - name: Validate
 security:
+- CookieAuth: []
 - BearerAuth: []
 components:
   securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: qa_access
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
     Error:
       type: object
@@ -107,7 +114,7 @@ components:
     Item:
       type: object
       properties:
-        false:
+        no:
           type: string
         kategori:
           type: string
@@ -431,7 +438,7 @@ paths:
           description: OK
   /sesi/{sesiId}/finalize:
     post:
-      summary: Finalisasi sesi setelah semua item diuji dan gate X1-X5 PASS (jika ada)
+      summary: Finalisasi hanya jika test plan lengkap, semua item diuji, gate wajib PASS, dan defect terselesaikan
       parameters:
       - name: sesiId
         in: path
@@ -443,3 +450,282 @@ paths:
           description: FINAL
         '422':
           description: Gate belum terpenuhi
+  /projects/{projectId}/plan:
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Baca test plan kanonis per project
+      responses:
+        '200': {description: Daftar item}
+    put:
+      summary: Ganti katalog test plan hanya sebelum sesi pertama dibuat (ADMIN)
+      responses:
+        '200': {description: Tersimpan}
+        '409': {description: Plan telah terkunci}
+  /projects/{projectId}/dashboard:
+    get:
+      summary: Dashboard jumlah sesi, status item, defect (scoped project)
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Statistik}
+  /projects/{projectId}/members:
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Daftar anggota dan role ADMIN/AUDITOR
+      responses:
+        '200': {description: Anggota}
+    post:
+      summary: Tambah user atau atur role project (ADMIN)
+      responses:
+        '201': {description: Anggota terpasang}
+  /projects/{projectId}/members/{userId}:
+    delete:
+      summary: Cabut keanggotaan kecuali admin terakhir atau diri sendiri
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: userId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '204': {description: Dicabut}
+        '409': {description: Admin terakhir atau diri sendiri}
+  /projects/{projectId}/people:
+    parameters:
+    - name: projectId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Daftar master penguji dan saksi
+      responses:
+        '200': {description: Daftar personel}
+    post:
+      summary: Tambah master penguji atau saksi
+      responses:
+        '201': {description: Personel dibuat}
+  /projects/{projectId}/people/{personId}:
+    patch:
+      summary: Perbarui master penguji atau saksi
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: personId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Diperbarui}
+  /projects/{projectId}/audit:
+    get:
+      summary: Audit trail append-only dengan pagination offset
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: offset
+        in: query
+        required: false
+        schema: {type: integer}
+      responses:
+        '200': {description: Riwayat audit}
+  /sesi/{sesiId}/history:
+    get:
+      summary: Riwayat perubahan hasil test case append-only
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Event perubahan}
+  /sesi/{sesiId}/defects:
+    get:
+      summary: Daftar defect pada sesi UAT
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Daftar defect}
+  /sesi/{sesiId}/defects/{defectId}:
+    patch:
+      summary: Update severity dan transisi state defect dengan RBAC
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: defectId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: Defect diperbarui}
+        '409': {description: Transisi tidak diizinkan}
+  /sesi/{sesiId}/defects/{defectId}/retests:
+    parameters:
+    - name: sesiId
+      in: path
+      required: true
+      schema: {type: integer}
+    - name: defectId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Riwayat retest defect
+      responses:
+        '200': {description: Riwayat retest}
+    post:
+      summary: Catat retest PASS/FAIL dan perbarui status item (TESTER)
+      responses:
+        '201': {description: Retest dicatat}
+  /sesi/{sesiId}/defects/{defectId}/comments:
+    parameters:
+    - name: sesiId
+      in: path
+      required: true
+      schema: {type: integer}
+    - name: defectId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Komentar defect
+      responses:
+        '200': {description: Komentar}
+    post:
+      summary: Tambah komentar defect append-only
+      responses:
+        '201': {description: Komentar tersimpan}
+  /sesi/{sesiId}/approvals:
+    parameters:
+    - name: sesiId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Riwayat persetujuan internal
+      responses:
+        '200': {description: Persetujuan}
+    post:
+      summary: Rekam keputusan WITNESS lalu APPROVER oleh dua akun berbeda (bukan PKI)
+      responses:
+        '201': {description: Persetujuan dicatat}
+        '403': {description: Separation of duties}
+        '409': {description: Urutan atau status tidak valid}
+  /sesi/{sesiId}/items/{itemId}/evidence:
+    parameters:
+    - name: sesiId
+      in: path
+      required: true
+      schema: {type: integer}
+    - name: itemId
+      in: path
+      required: true
+      schema: {type: integer}
+    get:
+      summary: Daftar bukti pada satu item
+      responses:
+        '200': {description: Bukti}
+    post:
+      summary: Upload PDF/PNG/JPEG maksimal 4 MiB hanya saat DRAFT
+      responses:
+        '201': {description: Bukti disimpan}
+  /sesi/{sesiId}/items/{itemId}/evidence/{evidenceId}/download:
+    get:
+      summary: Unduh bukti private dengan pemeriksaan membership
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: itemId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: evidenceId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200':
+          description: Konten berkas private
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+  /sesi/{sesiId}/items/{itemId}/evidence/{evidenceId}:
+    delete:
+      summary: Hapus bukti DRAFT oleh ADMIN dengan audit trail
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: itemId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: evidenceId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '204': {description: Dihapus}
+  /templates/{templateId}/fixtures/{fixtureId}/download:
+    get:
+      summary: Unduh fixture baseline private
+      parameters:
+      - name: templateId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: fixtureId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: PDF fixture}
+  /sesi/{sesiId}/outputs/{outputId}/download:
+    get:
+      summary: Unduh PDF versi tertentu private
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: outputId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200': {description: PDF ber-versi}
+
+  /aplikasi/{aplikasiId}:
+    patch:
+      summary: Update application
+      responses:
+        '200':
+          description: OK
+        '403':
+          description: Forbidden

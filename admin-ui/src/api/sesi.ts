@@ -1,6 +1,6 @@
 import { api } from './client';
-export interface Sesi { id: number; status: string; aplikasi_id: number; template_id: number; items?: Item[]; ringkasan?: Ringkasan; }
-export interface Item { no: string; kategori: string; kebutuhan: string; hasil: string; status: 'PASS' | 'FAIL' | 'BELUM'; urutan: number; }
+export interface Sesi { id: number; project_id: number; status: string; aplikasi_id: number; template_id: number; items?: Item[]; ringkasan?: Ringkasan; }
+export interface Item { id?: number; no: string; kategori: string; kebutuhan: string; hasil: string; status: 'PASS' | 'FAIL' | 'BELUM'; urutan: number; }
 export interface Ringkasan { total: number; lulus: number; gagal: number; belum: number; }
 export const sesiApi = {
   get: (id: number) => api.get<Sesi>(`/sesi/${id}`).then(r => r.data),

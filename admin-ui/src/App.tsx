@@ -9,6 +9,7 @@ import { TemplateEditorPage } from './pages/TemplateEditorPage';
 import { SesiDetailPage } from './pages/SesiDetailPage';
 import { ValidatePage } from './pages/ValidatePage';
 import { DiffViewerPage } from './pages/DiffViewerPage';
+import { ProjectOpsPage } from './pages/ProjectOpsPage';
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
             <Route path="/" element={<Navigate to="/projects" replace />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:id" element={<ProjectDetailPage />} />
+            <Route path="/projects/:id/manage" element={<ProjectOpsPage />} />
             <Route path="/templates/:id" element={<TemplateEditorPage />} />
             <Route path="/templates/:id/diff" element={<DiffViewerPage />} />
             <Route path="/sesi/:id" element={<SesiDetailPage />} />

@@ -44,7 +44,7 @@ Database hanya diakses lewat server Express (library `pg`), bukan Supabase JS da
 
 ## Cloudflare Hono (target deployment)
 
-Backend untuk Cloudflare menggunakan **Hono** (`admin-ui/functions/api/[[path]].js`) dan `pg` via Cloudflare Hyperdrive, bukan Express yang membutuhkan Node.js server. `admin-ui/worker/index.ts` melayani React SPA dan meneruskan `/api/*` ke Hono; build bundle dengan `cd admin-ui && npm install && npm run build && npm run build:worker`. Lihat `admin-ui/README-cloudflare.md` untuk konfigurasi nodejs_compat, secrets, dan keterbatasan fitur. PDF Chromium/Python masih hanya dapat dijalankan di backend eksternal, **tidak aktif pada Worker**. Integrasi Cloudflare dan build belum dinyatakan siap produksi hingga lulus smoke-test.
+Cloudflare menggunakan **Hono + React** (`admin-ui/functions/api/[[path]].js`, `admin-ui/worker/index.ts`), PostgreSQL lewat Hyperdrive, dan Cloudflare Browser Run untuk membuat PDF. Fitur workflow UAT tersedia pada `admin-ui/functions/api/workflow-routes.js`: test plan kanonis, RBAC, evidence, defect, retest, dan persetujuan internal. File PDF/fixture disimpan privat di Supabase sementara menunggu storage objek. Validasi PDF **baru SHA-256 byte identik, belum SSIM/pixel-perfect**. **Status tetap staging, bukan produksi yang telah disertifikasi**. Lihat [panduan deployment](admin-ui/README-cloudflare.md) dan [master issue #4](https://github.com/saibapna/qamanager/issues/4) untuk verifikasi serta gap yang masih terbuka.
 
 ## Pengujian
 
@@ -56,6 +56,10 @@ npm run build           # PDF demo lengkap 71 item
 ```
 
 Tes regresi memeriksa 71 item per project, tidak ada item ganda/hilang dalam page-map, serta role access berdasarkan pemilik resource. Validasi PDF piksel menggunakan `fixtures/lampiran.pdf` yang **tidak termasuk dalam repository**. Jumlah halaman fisik output harus diukur di lingkungan Chromium dan dibandingkan dengan fixture resmi; page-map hanya menjamin alokasi data, **bukan** identitas visual.
+
+## Catatan autentikasi Cloudflare
+
+Aplikasi Cloudflare memakai cookie HttpOnly/Secure/SameSite=Strict dan hash PBKDF2 100.000 iterasi yang kompatibel dengan Workerd. Skrip bootstrap lama berbasis Express/Argon2 **hanya untuk backend legacy/lokal**, bukan untuk menyiapkan akun login Cloudflare. Jangan menjalankan ulang bootstrap SQL pada database staging yang sudah berisi data.
 
 ## Keamanan & keterbatasan
 
@@ -77,24 +81,23 @@ Tes regresi memeriksa 71 item per project, tidak ada item ganda/hilang dalam pag
 - `api-docs/openapi.yaml` — kontrak OpenAPI.
 - `prd/`, `spec-tech/` — requirement dan rancangan.
 
-## Cloudflare (Hono, staging)
+## Cloudflare staging — master audit workflow
 
-Untuk deployment Cloudflare, kode Hono berada di
-`admin-ui/functions/api/[[path]].ts`; frontend React di-serve oleh Cloudflare
-Pages dan Hono menangani `/api/*`. Saat ini hanya `/api/status` dan
-`/api/health` aktif (cek database Supabase secara read-only). Endpoint autentikasi,
-CRUD, dan PDF sengaja mengembalikan 503 sampai implementasi aman selesai.
-Lihat `admin-ui/README-cloudflare.md` untuk langkah deploy dan batasannya.
-Jangan menganggap staging sudah layak untuk transaksi ULO produksi.
+**Source runtime:** Cloudflare Workers + Hono (admin-ui/functions/api/[[path]].js) + React SPA (admin-ui/worker/index.ts) + Supabase via Hyperdrive. Express is a legacy/local backend, not deployed to Cloudflare.
 
+- Staging: https://qamanager.saipulbahri-it.workers.dev
+- Release gates: https://github.com/saibapna/qamanager/issues/4
+- Project data stays in the private Supabase ulo_uat schema; qamanager_web is the server-only database identity.
+- Browser JWTs are stored in Secure HttpOnly SameSite cookies rather than localStorage. Refresh tokens rotate and are revoked by the server.
+- Platform admins create projects; project-scoped ADMIN, TESTER, WITNESS, APPROVER and AUDITOR roles enforce CRUD and approval rights.
+- Every new session instantiates all canonical test cases in BELUM state. Failed tests create defects; finalized sessions must pass canonical-plan and outstanding-defect checks.
+- Versioned PDFs, fixture uploads and evidence are private and size-limited in Supabase bytea while R2 is not active.
 
-## Cloudflare staging (Hono)
+**Limits:**
 
-Cloudflare Pages serves the React frontend and a Hono Pages Function at
-`admin-ui/functions/api/[[path]].ts`. Only API status and a protected
-read-only Supabase database probe are available. Other API routes intentionally
-return HTTP 503 until production authentication and CRUD are integrated.
+1. No qualified PKI-backed electronic signature yet. In-app witness/approver decisions are recorded, not certified digital signatures.
+2. No certified visual SSIM/heatmap comparison to the official five-page PDF fixture; exact PDF SHA-256 comparison is not the same thing.
+3. PDF/fixture end-to-end tests, recovery drills, Cloudflare deployment automation and incident alerting must pass before production acceptance.
+4. Historical FINAL sessions are not silently reopened by schema migration. Legacy finalizations must be reviewed.
 
-The complete PDF/validation pipeline still requires a separate runtime with
-Chromium/Puppeteer and Python, not a plain Cloudflare Worker. See
-`admin-ui/README-cloudflare.md`.
+Do not mark remaining issue #4 checklist entries as complete without their acceptance evidence. Successful build/health endpoints alone do not certify UAT production readiness.

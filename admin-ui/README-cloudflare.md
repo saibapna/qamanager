@@ -1,18 +1,33 @@
-# Cloudflare deployment - Hono + React
+# Cloudflare Hono Runtime — QA Manager
 
-The `worker/index.ts` Worker serves the Vite-built React SPA and routes `/api/*` to the Hono application in `functions/api/[[path]].js`. Its Vite assets are embedded into the compiled Worker by `scripts/inline-worker-assets.mjs`. The `build:worker` command requires a successful frontend `npm run build` first. This is a deployment bridge while Cloudflare GitHub/Pages integration is unavailable; use Workers Static Assets for a larger production frontend.
+A single Cloudflare Worker serves the React SPA and the Hono API. The old Express server is for local/legacy use only.
 
-Build on a Node.js 22 machine with npm registry access:
+## Required bindings
+- HYPERDRIVE — database connection to the private Supabase ulo_uat schema.
+- JWT_ACCESS_SECRET — server-only access-token secret.
+- JWT_REFRESH_SECRET — independent server-only refresh-token secret.
+- BROWSER — Cloudflare Browser Run binding for PDF generation.
+- nodejs_compat — required by node:crypto and the PostgreSQL client.
 
-```bash
-cd admin-ui
-npm install
-npm run build
-npm run build:worker
-```
+The source is in admin-ui/functions/api/[[path]].js. The SPA worker entrypoint is admin-ui/worker/index.ts.
 
-The GitHub Actions workflow `build-cloudflare-worker.yml` builds and uploads the Worker bundle as an artifact. Deploy it with Cloudflare Workers, Node.js compatibility (`nodejs_compat`, compatibility date `2026-11-20`), and **server-only bindings** `HYPERDRIVE`, `JWT_ACCESS_SECRET`, and `JWT_REFRESH_SECRET`. The Hyperdrive config must point to a database login whose access is restricted to the private `ulo_uat` schema. Never put database credentials or signing keys in source or Vite `VITE_*` variables.
+## Build and deployment
+Run in admin-ui: npm install --no-audit --no-fund; npm run build; npm run build:worker.
 
-The database schema currently has no interactive admin account. Provision users securely server-side. The Hono API supports core ULO operations but its Cloudflare runtime has **not** passed end-to-end test. The old Express/Puppeteer/Python PDF service is intentionally not deployed; PDF, fixture, and diff routes return 501.
+The GitHub build workflow publishes a Worker artifact but does NOT automatically deploy. Deploy with all runtime bindings preserved. Verify authenticated workflows on the public staging URL after deployment.
 
-Important: browser code and all Worker routes must use HTTPS. Before claiming production readiness: install a first admin account, smoke-test login/refresh, verify per-project authorization, test transactions, and configure Cloudflare rate limits, observability, and monitoring. The staging code does not promise 1:1 PDF fidelity.
+## Migration and workflow
+Apply db/migrations/20261121_master_audit_workflow.sql before deploying this version. The migration preserves existing UAT sessions and output history, adds immutable audit triggers, test_plan_items, item events, defects, retests, evidence, approvals, people and authentication rate-limit counters.
+
+Project administrators manage the canonical test plan. Once the project has sessions, the plan is immutable through the API. New sessions copy the entire plan. PDF/fixtures/evidence are stored as bounded private bytea for staging; object storage and lifecycle policy are still required for larger production volumes.
+
+## Security
+- Login uses password PBKDF2-SHA256 at 100000 iterations, compatible with Cloudflare Workers.
+- Browser tokens use Secure HttpOnly SameSite=Strict cookies; client authentication state is memory-only.
+- Refresh tokens are rotated and server logout revokes the refresh token.
+- Cross-origin state-changing requests are blocked.
+- Rate limiting is backed by PostgreSQL hashed IP/account keys.
+- Authorization resolves tenant membership and role on the server.
+
+## Release blockers
+See GitHub issue #4. Qualified PKI signatures, official visual PDF fixture SSIM/heatmap validation, production file storage/backup/restore drill and CI/CD verification are not implied by a passing build or health check.
