@@ -5,6 +5,8 @@ export class ProjectLive extends DurableObject {
   broadcast(event) {
     const data = JSON.stringify(event);
     for (const socket of this.ctx.getWebSockets()) {
+      const exp=Number(socket.deserializeAttachment()?.exp||0);
+      if(exp>0 && exp<=Math.floor(Date.now()/1000)){try{socket.close(1008,'Session expired');}catch{} continue;}
       try { socket.send(data); } catch { try { socket.close(); } catch {} }
     }
   }
@@ -12,7 +14,7 @@ export class ProjectLive extends DurableObject {
     const users = new Map();
     for (const socket of this.ctx.getWebSockets()) {
       const a = socket.deserializeAttachment();
-      if (!a || !a.uid) continue;
+      if (!a || !a.uid || (a.exp && Number(a.exp)<=Math.floor(Date.now()/1000))) continue;
       const old = users.get(a.uid);
       users.set(a.uid, { userId: a.uid, name: a.name, sessionId: a.sessionId || null, connections: (old?.connections || 0) + 1 });
     }
@@ -24,11 +26,12 @@ export class ProjectLive extends DurableObject {
       const uid = request.headers.get('X-QA-User');
       const name = request.headers.get('X-QA-Name') || 'Tester';
       const sid = request.headers.get('X-QA-Session');
-      if (!uid || !/^\d+$/.test(uid)) return new Response('Unauthorized', { status: 401 });
+      const exp=Number(request.headers.get('X-QA-Expires')||0);
+      if (!uid || !/^\d+$/.test(uid) || !Number.isSafeInteger(exp) || exp<=Math.floor(Date.now()/1000)) return new Response('Unauthorized', { status: 401 });
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
       this.ctx.acceptWebSocket(server);
-      server.serializeAttachment({ uid, name: name.slice(0, 80), sessionId: sid && /^\d+$/.test(sid) ? Number(sid) : null });
+      server.serializeAttachment({ uid, name: name.slice(0, 80), sessionId: sid && /^\d+$/.test(sid) ? Number(sid) : null, exp });
       this.presence();
       return new Response(null, { status: 101, webSocket: client, headers: { 'Sec-WebSocket-Protocol': 'qa-live-v1' } });
     }
