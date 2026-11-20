@@ -49,6 +49,7 @@ export function useProjectLive(projectId: number, sessionId?: number) {
             queryClient.invalidateQueries({ queryKey: ['aplikasi', projectId] });
             queryClient.invalidateQueries({ queryKey: ['sessions'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard', projectId] });
+            queryClient.invalidateQueries({ queryKey: ['project-dashboard', projectId] });
             queryClient.invalidateQueries({ queryKey: ['activity', projectId] });
             if (event.sessionId) {
               queryClient.invalidateQueries({ queryKey: ['sesi', event.sessionId] });
