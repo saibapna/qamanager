@@ -9,14 +9,12 @@ import { Modal } from '@/components/Modal';
 import { FormField, inputCls } from '@/components/FormField';
 import { Badge } from '@/components/Badge';
 import { useToast } from '@/components/Toast';
-import {useAuth} from '@/store/authStore';
 
 export function ProjectsPage() {
   const nav = useNavigate();
   const isPlatformAdmin=useAuth(s=>!!s.user?.is_platform_admin);
   const qc = useQueryClient();
   const toast = useToast();
-  const isPlatformAdmin=useAuth(s=>Boolean(s.user?.is_platform_admin));
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ kode: '', nama: '', instansi: '', bidang: '' });
 
