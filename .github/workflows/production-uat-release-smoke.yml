@@ -40,5 +40,5 @@ jobs:
           check GET /api/templates/1/fixtures 401
           check GET /api/auth/me 401
           check GET /login 200
-          grep -q '<!doctype html>' /tmp/response.txt
+          grep -iq '<!doctype html>' /tmp/response.txt
           echo 'Production UAT unauthenticated smoke PASSED'
