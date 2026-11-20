@@ -83,14 +83,14 @@ try {
     return response;
   }
 
-  const page = await smoke('/projects', /^text\\/html\\b/i);
-  assert.match(await page.text(), /<html\\b/i, '/projects did not return an HTML document');
-  const status = await smoke('/api/status', /^application\\/json\\b/i);
+  const page = await smoke('/projects', new RegExp('^text/html', 'i'));
+  assert.ok((await page.text()).toLowerCase().includes('<html'), '/projects did not return an HTML document');
+  const status = await smoke('/api/status', new RegExp('^application/json', 'i'));
   const result = await status.json();
   assert.equal(result.service, workerName, 'Wrong Worker answered the status check');
   assert.equal(result.ready, true, 'API reports missing bindings');
 
-  const health = await smoke('/api/health', /^application\\/json\\b/i);
+  const health = await smoke('/api/health', new RegExp('^application/json', 'i'));
   const healthData = await health.json();
   assert.equal(healthData.ok, true, 'Database health check failed');
   assert.equal(healthData.database, 'connected', 'Hyperdrive is not connected');
