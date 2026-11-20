@@ -92,6 +92,12 @@ jobs:
           echo "private evidence download HTTP $status"
           test "$status" = 200
           cmp /tmp/smoke.png /tmp/returned.png
+          status=$(request DELETE "/api/sesi/$sid/items/$iid/evidence/$eid" '{}' /tmp/evidence-deleted)
+          echo "soft-delete evidence HTTP $status"
+          test "$status" = 204
+          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/retired -w '%{http_code}' "$BASE/api/sesi/$sid/items/$iid/evidence/$eid/download")
+          echo "soft-deleted evidence download HTTP $status"
+          test "$status" = 404
           status=$(request POST "/api/sesi/$sid/finalize" '{}' /tmp/denied-finalize)
           echo "TESTER finalize forbidden HTTP $status"
           test "$status" = 403
@@ -99,7 +105,7 @@ jobs:
           echo "immutable history HTTP $status"
           test "$status" = 200
           jq -e 'length > 0' /tmp/history >/dev/null
-          status="$(curl --silent --show-error --max-time 180 "${auth[@]}" -X POST -o /tmp/ulo.pdf -w '%{http_code}' "$BASE/api/sesi/$sid/pdf")"
+          status="$(curl --silent --show-error --max-time 180 "${auth[@]}" -H 'X-Requested-With: XMLHttpRequest' -X POST -o /tmp/ulo.pdf -w '%{http_code}' "$BASE/api/sesi/$sid/pdf")"
           echo "Generate UAT PDF HTTP $status"
           if [ "$status" != "200" ]; then
             head -c 350 /tmp/ulo.pdf | tr -c '[:print:]' ' '
@@ -111,10 +117,14 @@ jobs:
           echo "refresh rotation HTTP $status"
           test "$status" = 200
           jq -e '(has("accessToken")|not) and (has("refreshToken")|not)' /tmp/refresh >/dev/null
+          cp /tmp/qa-cookie /tmp/pre-logout-cookie
           status=$(request POST /api/auth/logout '{}' /tmp/logout)
           echo "server logout HTTP $status"
           test "$status" = 200
           status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/after -w '%{http_code}' "$BASE/api/auth/me")
           echo "after logout /me HTTP $status"
+          test "$status" = 401
+          status=$(curl --silent --show-error --max-time 30 -b /tmp/pre-logout-cookie -o /tmp/replay -w '%{http_code}' "$BASE/api/auth/me")
+          echo "revoked access token replay HTTP $status"
           test "$status" = 401
           echo "End-to-end UAT first-stage integration succeeded"
