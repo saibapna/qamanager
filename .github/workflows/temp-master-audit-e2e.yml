@@ -92,12 +92,9 @@ jobs:
           echo "private evidence download HTTP $status"
           test "$status" = 200
           cmp /tmp/smoke.png /tmp/returned.png
-          status=$(request DELETE "/api/sesi/$sid/items/$iid/evidence/$eid" '{}' /tmp/evidence-deleted)
-          echo "soft-delete evidence HTTP $status"
-          test "$status" = 204
-          status=$(curl --silent --show-error --max-time 30 "${auth[@]}" -o /tmp/retired -w '%{http_code}' "$BASE/api/sesi/$sid/items/$iid/evidence/$eid/download")
-          echo "soft-deleted evidence download HTTP $status"
-          test "$status" = 404
+          status=$(request DELETE "/api/sesi/$sid/items/$iid/evidence/$eid" '{}' /tmp/evidence-delete-denied)
+          echo "TESTER evidence delete forbidden HTTP $status"
+          test "$status" = 403
           status=$(request POST "/api/sesi/$sid/finalize" '{}' /tmp/denied-finalize)
           echo "TESTER finalize forbidden HTTP $status"
           test "$status" = 403
