@@ -2,8 +2,6 @@ name: Production API smoke
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/production-api-smoke.yml'
   workflow_dispatch: {}
   schedule:
     - cron: '*/30 * * * *'
@@ -38,4 +36,19 @@ jobs:
           echo "unauthenticated projects HTTP $unauth"
           cat /tmp/qamanager-unauth.json
           test "$unauth" = "401"
+          # Anonymous callers must never reach project- or session-scoped realtime
+          # endpoints. This runs on every main deployment and every 30 minutes.
+          for route in \
+            /api/live/projects/1/ws \
+            /api/projects/1/dashboard \
+            /api/projects/1/live-dashboard \
+            /api/projects/1/activity \
+            /api/projects/1/members \
+            /api/sesi/1/defects \
+            /api/sesi/1/approvals \
+            /api/templates/1/fixtures/1/download; do
+            unauthorized="$(curl --max-time 30 --silent --show-error -o /tmp/qamanager-protected.json -w '%{http_code}' "$base$route")"
+            echo "anonymous $route HTTP $unauthorized"
+            test "$unauthorized" = "401"
+          done
           echo "Production smoke checks passed"

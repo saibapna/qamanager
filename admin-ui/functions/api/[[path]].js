@@ -199,7 +199,8 @@ app.get('/api/live/projects/:projectId/ws',async c=>{
     }
   }));
 });
-app.get('/api/projects/:projectId/dashboard',async c=>{
+// Separate session-progress API from the existing project-operations dashboard contract.
+app.get('/api/projects/:projectId/live-dashboard',async c=>{
   const pid=await guard(c,'projectId');
   return c.json((await q(c,`SELECT s.id,s.status,s.revision,a.nama_singkat,COUNT(i.id)::int AS total,
      COUNT(i.id) FILTER (WHERE i.status='PASS')::int AS lulus,
