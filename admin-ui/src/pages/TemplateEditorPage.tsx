@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Editor from '@monaco-editor/react';
-import { Save, Upload } from 'lucide-react';
+import { Download, Save, Upload } from 'lucide-react';
 import { templatesApi, Template } from '@/api/templates';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
@@ -16,6 +16,7 @@ export function TemplateEditorPage() {
   const { data: tpl, isLoading } = useQuery({ queryKey: ['template', tid], queryFn: () => templatesApi.get(tid) });
   const [draft, setDraft] = useState<Partial<Template>>({});
   const [tab, setTab] = useState<'layout' | 'kategori' | 'page-map'>('layout');
+  const { data: fixtures = [] } = useQuery({ queryKey: ['fixtures',tid], queryFn: () => templatesApi.fixtures(tid), enabled: !!tpl });
 
   useEffect(() => { if (tpl) setDraft(tpl); }, [tpl]);
 
@@ -33,9 +34,18 @@ export function TemplateEditorPage() {
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => templatesApi.uploadFixture(tid, file),
-    onSuccess: () => toast.push('success', 'Fixture diunggah'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fixtures',tid] }); toast.push('success', 'Fixture PDF berhasil disimpan'); },
     onError: (e: Error) => toast.push('error', e.message)
   });
+
+  const download = async (fixtureId: number, name: string) => {
+    try {
+      const blob = await templatesApi.downloadFixture(tid, fixtureId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = name || 'fixture.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) { toast.push('error', e instanceof Error ? e.message : 'Gagal mengunduh fixture'); }
+  };
 
   if (isLoading || !draft.id) return <div>Memuat...</div>;
 
@@ -61,6 +71,15 @@ export function TemplateEditorPage() {
             )}
           </>
         } />
+      <div className="bg-white rounded-xl border p-4 mb-4">
+        <p className="font-semibold text-sm mb-2">Fixture PDF baseline</p>
+        {fixtures.length === 0 ? <p className="text-sm text-slate-500">Belum ada fixture. Unggah PDF baseline untuk verifikasi berkas.</p> :
+          fixtures.map(f => <div key={f.id} className="flex justify-between items-center text-sm py-2 border-t">
+            <span>{f.nama} · {f.page_count || '?'} halaman · {((f.size_bytes || 0)/1024).toFixed(1)} KB</span>
+            <button type="button" className="inline-flex items-center gap-1 text-blue-700 hover:underline" onClick={() => download(f.id, f.nama)}><Download size={16}/> Unduh</button>
+          </div>)}
+        <p className="text-xs text-slate-500 mt-2">Validasi di Cloudflare saat ini memeriksa SHA-256 persis, bukan SSIM atau kesamaan visual piksel.</p>
+      </div>
       <div className="bg-white rounded-xl border">
         <div className="flex border-b">
           {(['layout', 'kategori', 'page-map'] as const).map(t => (
