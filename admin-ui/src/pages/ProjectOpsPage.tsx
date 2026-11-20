@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { useAuth, Role } from '@/store/authStore';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
+import { TestPlanTable } from '@/components/TestPlanTable';
 
 type Member={id:number;email:string;nama:string;role:Role;aktif:boolean};
 type Person={id:number;kind:'PENGUJI'|'SAKSI';nama:string;jabatan:string|null;email:string|null;telepon:string|null;nip:string|null;aktif:boolean};
@@ -24,7 +25,6 @@ export function ProjectOpsPage(){
   const [member,setMember]=useState<{nama:string;email:string;password:string;role:Role}>({nama:'',email:'',password:'',role:'TESTER'});
   const [person,setPerson]=useState({kind:'PENGUJI' as 'PENGUJI'|'SAKSI',nama:'',jabatan:'',email:'',telepon:'',nip:''});
   const [editingPerson,setEditingPerson]=useState<number|null>(null);
-  const [planSearch,setPlanSearch]=useState('');
   const [planJson,setPlanJson]=useState('');
   const [offset,setOffset]=useState(0);
   const {data:dashboard}=useQuery({queryKey:['project-dashboard',pid],queryFn:()=>api.get<Dashboard>('/projects/'+pid+'/dashboard').then(r=>r.data)});
@@ -58,8 +58,7 @@ export function ProjectOpsPage(){
     onError:(e:Error)=>toast.push('error',e.message)
   });
   const savePlan=useMutation({
-    mutationFn:()=>{
-      const rows=JSON.parse(planJson) as Item[];
+    mutationFn:(rows:Item[])=>{
       if(!Array.isArray(rows))throw new Error('Isi JSON harus array test case');
       return api.put('/projects/'+pid+'/plan',{items:rows});
     },
@@ -118,14 +117,11 @@ export function ProjectOpsPage(){
     {section==='plan'&&<section className="rounded-xl bg-white border p-5 space-y-4">
       <h2 className="font-semibold">Test Plan Kanonis ({plan.length} item)</h2>
       <p className="text-sm text-slate-600">Test plan terkunci setelah project memiliki sesi UAT. Saat sesi baru dibuat, semua item akan disalin dan tidak boleh dihapus atau diubah identitasnya.</p>
-      <label className="block text-sm">Cari test case<input value={planSearch} onChange={e=>setPlanSearch(e.target.value)}
-        className={input} placeholder="Nomor, kategori, kebutuhan"/></label>
-      <div className="max-h-96 overflow-auto border rounded"><table className="w-full text-sm"><thead className="sticky top-0 bg-white"><tr className="border-b"><th>No</th><th>Kategori</th><th>Kebutuhan</th><th>Urutan</th><th>Gate</th></tr></thead>
-        <tbody>{plan.filter(t=>[t.no,t.kategori,t.kebutuhan].some(v=>v.toLowerCase().includes(planSearch.toLowerCase()))).map(t=><tr key={t.no} className="border-b"><td className="p-2">{t.no}</td><td className="p-2">{t.kategori}</td><td className="p-2">{t.kebutuhan}</td><td className="p-2">{t.urutan}</td><td className="p-2">{t.gate_required?'Wajib':'—'}</td></tr>)}</tbody></table></div>
-      {admin&&(dashboard?.sessions.total||0)===0&&<div><label className="block text-sm mb-2">Tempel JSON array item: no, kategori, kebutuhan, urutan dan gate_required</label>
+      <TestPlanTable items={plan} editable={admin&&dashboard?.sessions.total===0} saving={savePlan.isPending} onSave={async rows=>{await savePlan.mutateAsync(rows)}} />
+      {admin&&dashboard?.sessions.total===0&&<div><label className="block text-sm mb-2">Tempel JSON array item: no, kategori, kebutuhan, urutan dan gate_required</label>
         <button type="button" className="rounded border px-3 py-2 mb-2 text-sm" onClick={()=>setPlanJson(JSON.stringify(plan,null,2))}>Muat test plan ke editor</button>
         <textarea className={input} rows={7} value={planJson} onChange={e=>setPlanJson(e.target.value)} placeholder='[{"no":"A1","kategori":"A","kebutuhan":"Login","urutan":1,"gate_required":false}]'/>
-        <button className={btn} disabled={!planJson||savePlan.isPending} onClick={()=>savePlan.mutate()}>Simpan test plan</button>
+        <button className={btn} disabled={!planJson||savePlan.isPending} onClick={()=>{try{savePlan.mutate(JSON.parse(planJson) as Item[])}catch{toast.push('error','JSON test plan tidak valid')}}}>Simpan test plan</button>
       </div>}
     </section>}
     {section==='audit'&&reader&&<section className="rounded-xl bg-white border p-5">
