@@ -1,0 +1,32 @@
+name: Production login UI smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-login-ui-smoke.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  login-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify deployed login UI and Hono API
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://qamanager.saipulbahri-it.workers.dev"
+          curl --fail --silent --show-error --max-time 30 "$base/login" -o /tmp/login-page.html
+          asset="$(grep -oE '/assets/index-[^"]+\.js' /tmp/login-page.html | head -n1)"
+          test -n "$asset"
+          curl --fail --silent --show-error --max-time 30 "$base$asset" -o /tmp/qamanager-client.js
+          if grep -qF 'login dan pengelolaan UAT belum diaktifkan di Cloudflare' /tmp/qamanager-client.js; then
+            echo 'ERROR: outdated staging message is still deployed'
+            exit 1
+          fi
+          grep -qF 'Masuk menggunakan akun QA Manager yang terdaftar' /tmp/qamanager-client.js
+          grep -qF 'password database PostgreSQL' /tmp/qamanager-client.js
+          curl --fail --silent --show-error --max-time 30 "$base/api/health" -o /tmp/health.json
+          jq -e '.ok == true and .database == "connected"' /tmp/health.json
+          echo "Production login UI and Hono health checks passed"
