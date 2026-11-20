@@ -1,6 +1,6 @@
 
 import {createHash} from 'node:crypto';
-import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState} from './workflow-core.js';
+import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState,validateDefectEdit} from './workflow-core.js';
 
 const good=(v,max=255)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
 const optional=v=>typeof v==='string'?v.trim():null;
@@ -151,23 +151,14 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json}){
       const prev=await first(c,'SELECT status FROM ulo_defects WHERE sesi_id=$1 AND id=$2 FOR UPDATE',[sid,did]);
       if(!prev)fail(404,'Defect tidak ditemukan');
       if(prev.status==='WAIVED')fail(409,'Waiver yang disetujui tidak dapat diubah');
-      const transition={OPEN:['IN_PROGRESS','WAIVED'],IN_PROGRESS:['FIXED','WAIVED'],FIXED:['REOPENED','WAIVED'],REOPENED:['IN_PROGRESS','WAIVED'],VERIFIED:['REOPENED'],WAIVED:[]};
-      if(d.status!==undefined){
-        if(!transition[prev.status]?.includes(d.status))fail(409,'Transisi defect tidak valid');
-        if(d.status==='WAIVED'&&await role(c,pid)!=='APPROVER')fail(403,'Hanya APPROVER dapat waiver');
-        if(d.status==='WAIVED'&&!good(d.resolution_note,5000))fail(422,'Waiver perlu alasan tertulis');
-      }
-      if(d.severity!==undefined&&!['LOW','MEDIUM','HIGH','CRITICAL'].includes(d.severity))fail(422,'Severity invalid');
-      if(d.title!==undefined&&!good(d.title,255))fail(422,'Judul defect tidak valid');
-      if(d.description!==undefined&&d.description!==null&&(typeof d.description!=='string'||d.description.length>5000))fail(422,'Deskripsi defect tidak valid');
-      if(d.resolution_note!==undefined&&d.resolution_note!==null&&(typeof d.resolution_note!=='string'||d.resolution_note.length>5000))fail(422,'Alasan defect tidak valid');
+      let fields;
+      try{fields=validateDefectEdit(prev.status,await role(c,pid),d);}
+      catch(e){fail(e.message.includes('Hanya APPROVER')?403:e.message.includes('Transisi')||e.message.includes('Waiver yang')?409:422,e.message);}
       if(d.owner_id!==undefined&&d.owner_id!==null){
         const owner=id(d.owner_id);
         const member=await first(c,'SELECT 1 FROM project_members pm JOIN users u ON u.id=pm.user_id WHERE pm.project_id=$1 AND pm.user_id=$2 AND u.aktif=TRUE',[pid,owner]);
         if(!member)fail(422,'Owner defect harus anggota aktif project');
       }
-      const fields=['severity','status','description','title','owner_id','resolution_note'].filter(k=>d?.[k]!==undefined);
-      if(!fields.length)fail(422,'Tidak ada perubahan');
       const result=await first(c,'UPDATE ulo_defects SET '+fields.map((k,i)=>k+'=$'+(i+1)).join(',')+',updated_at=now() WHERE id=$'+(fields.length+1)+' AND sesi_id=$'+(fields.length+2)+' RETURNING *',[...fields.map(k=>d[k]),did,sid]);
       if(!result)fail(409,'Defect berubah secara bersamaan; muat ulang');
       c.set('pid',pid);await audit(c,'DEFECT_UPDATED','defect',did,{fields,previous_status:prev.status,new_status:result.status});
