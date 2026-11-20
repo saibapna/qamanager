@@ -1,0 +1,28 @@
+name: Cloudflare production browser smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-browser-smoke.yml'
+      - '.github/playwright.production.config.mjs'
+      - '.github/tests/production-browser.spec.mjs'
+      - 'admin-ui/src/pages/LoginPage.tsx'
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 2 * * *'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Install pinned Playwright Test
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund @playwright/test@1.65.1
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Exercise production login, deep-link routing and mobile layout
+        run: npx playwright test --config=.github/playwright.production.config.mjs

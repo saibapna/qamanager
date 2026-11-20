@@ -34,19 +34,19 @@ export function LoginPage() {
         </p>
         <form onSubmit={onSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" name="email" autoComplete="username" required autoFocus value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
+            <label htmlFor="qa-login-email" className="block text-sm font-medium mb-1">Email</label>
+            <input id="qa-login-email" type="email" name="email" autoComplete="username" required autoFocus value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
           </div>
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label htmlFor="qa-login-password" className="block text-sm font-medium mb-1">Password</label>
             <div className="relative">
-              <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className={`${inputCls} pr-12`} />
+              <input id="qa-login-password" type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className={`${inputCls} pr-12`} />
               <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute inset-y-0 right-2 flex items-center px-2 text-slate-500 hover:text-slate-900" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} aria-pressed={showPassword}>
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
-          {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+          {error && <p id="qa-login-error" role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
           <button type="submit" disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
             <LogIn size={18} />{loading ? 'Masuk...' : 'Masuk'}
