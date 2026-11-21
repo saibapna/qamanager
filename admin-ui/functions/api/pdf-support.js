@@ -1,3 +1,4 @@
+import { formatDateIndonesia, formatPukulWib, weekdayMismatch, weekdayIndonesia } from '../../../src/utils/indonesian-dates.js';
 import { renderSafeHandlebars } from './safe-handlebars.js';
 import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
@@ -68,7 +69,11 @@ function buildHtml({ sesi, tpl, items, fail }) {
     dokumen: {
       jenis: formKind, totalPages: pages.length+1,
       showSummaryFirst: pages.length>=4, showSummaryFinal: pages.length>=4,
-      signatureNotice: 'Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan.'
+      signatureNotice: 'Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan.' +
+        (weekdayMismatch(sesi.hari, sesi.tanggal)
+          ? ' Periksa sumber: hari tertulis ' + sesi.hari + ' tidak cocok dengan ' +
+            formatDateIndonesia(sesi.tanggal) + ' (' + weekdayIndonesia(sesi.tanggal) + ' menurut kalender).'
+          : '')
     },
     project: {
       instansi: sesi.instansi,
@@ -80,7 +85,7 @@ function buildHtml({ sesi, tpl, items, fail }) {
     },
     skpd: { nama: sesi.instansi || sesi.project_nama, kota: sesi.kota_kab_prov || '' },
     aplikasi: { nama_singkat: sesi.nama_singkat, nama_panjang: sesi.nama_panjang, url: sesi.url },
-    sesi: { hari: sesi.hari, tanggal: sesi.tanggal, pukul: sesi.pukul, tempat: sesi.tempat, jenis: sesi.jenis },
+    sesi: { hari: sesi.hari || weekdayIndonesia(sesi.tanggal), tanggal: formatDateIndonesia(sesi.tanggal), pukul: formatPukulWib(sesi.pukul), tempat: sesi.tempat, jenis: sesi.jenis },
     penguji: {
       nama: sesi.penguji_nama, jabatan: sesi.penguji_jabatan,
       email: sesi.penguji_email, telp: sesi.penguji_telp, nip: sesi.penguji_nip
