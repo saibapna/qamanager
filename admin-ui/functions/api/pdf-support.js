@@ -67,6 +67,7 @@ function buildHtml({ sesi, tpl, items, fail }) {
     penerbit: { dinas:'Dinas Komunikasi, Informatika dan Persandian Aceh', bidang:'Bidang Layanan E-Government' },
     dokumen: {
       jenis: formKind, totalPages: pages.length+1,
+      showSummaryFirst: pages.length>=4, showSummaryFinal: pages.length>=4,
       signatureNotice: 'Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan.'
     },
     project: {
