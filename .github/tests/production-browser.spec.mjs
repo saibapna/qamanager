@@ -180,6 +180,18 @@ test('WCAG 2.1 AA: synthetic PDF validation form',async ({page})=>{
   await assertWcag21Aa(page,'synthetic PDF validation');
 });
 
+test('WCAG 2.1 AA: synthetic PDF validation mobile width does not overflow',async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.setViewportSize({width:375,height:812});
+  await page.goto('/validate',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Validasi PDF'})).toBeVisible();
+  const dimensions=await page.evaluate(()=>({
+    scroll:document.documentElement.scrollWidth,viewport:window.innerWidth
+  }));
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.viewport+1);
+  await assertWcag21Aa(page,'synthetic mobile PDF validation');
+});
+
 test('WCAG 2.1 AA: portfolio with an authorized project',async ({page})=>{
   await installSyntheticAuthenticatedUi(page);
   await page.goto('/projects',{waitUntil:'domcontentloaded'});
