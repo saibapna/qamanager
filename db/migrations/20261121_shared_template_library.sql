@@ -42,10 +42,20 @@ END;
 $$;
 REVOKE ALL ON FUNCTION ulo_uat.enforce_template_share_published() FROM PUBLIC;
 
-DROP TRIGGER IF EXISTS trg_enforce_template_share_published ON ulo_uat.template_shares;
-CREATE TRIGGER trg_enforce_template_share_published
-BEFORE INSERT OR UPDATE ON ulo_uat.template_shares
-FOR EACH ROW EXECUTE FUNCTION ulo_uat.enforce_template_share_published();
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'ulo_uat.template_shares'::regclass
+      AND tgname = 'trg_enforce_template_share_published'
+      AND NOT tgisinternal
+  ) THEN
+    CREATE TRIGGER trg_enforce_template_share_published
+    BEFORE INSERT OR UPDATE ON ulo_uat.template_shares
+    FOR EACH ROW EXECUTE FUNCTION ulo_uat.enforce_template_share_published();
+  END IF;
+END;
+$;
 
 COMMENT ON TABLE ulo_uat.template_shares IS
   'Only an explicit source-project ADMIN may share a published template. No fixture, session, evidence or PDF content is shared. Imported templates are independent DRAFT copies.';
