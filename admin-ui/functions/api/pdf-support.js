@@ -169,6 +169,58 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     return safePdfResponse(bytes, 'fixture-template-' + tid + '-' + fid + '.pdf');
   });
 
+  // Authenticated, ephemeral PDF preview. No output row, Storage object, or audit event.
+  // Use the same HTML builder and Browser Run PDF renderer as the persisted output.
+  app.post('/api/sesi/:sesiId/pdf/preview', async c => {
+    const projectId = await guard(c, 'sesiId', ['ADMIN', 'TESTER']);
+    const sid = id(c.req.param('sesiId'));
+    if (!c.env.BROWSER?.quickAction) fail(503, 'Binding Cloudflare Browser Run belum dikonfigurasi');
+    const sesi = await first(c,
+      'SELECT s.*, a.nama_singkat,a.nama_panjang,a.url,p.nama AS project_nama,p.instansi,p.bidang FROM ulo_sesi s JOIN aplikasi a ON a.id=s.aplikasi_id JOIN projects p ON p.id=s.project_id WHERE s.id=$1',
+      [sid]);
+    if (!sesi) fail(404, 'Sesi tidak ditemukan');
+    const sourceRevision = Number(sesi.revision);
+    const sourceStatus = String(sesi.status);
+    if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 1) fail(409, 'Sesi memerlukan revisi valid');
+    const tpl = await first(c,
+      'SELECT layout_hbs,partials,kategori_map,page_map,published FROM templates WHERE id=$1 AND project_id=$2',
+      [sesi.template_id, projectId]);
+    if (!tpl?.published) fail(409, 'Template sesi belum published');
+    const items = (await q(c,
+      'SELECT no,kategori,kebutuhan,hasil,status,urutan FROM ulo_item WHERE sesi_id=$1 ORDER BY urutan', [sid])).rows;
+    if (!items.length) fail(422, 'Belum ada item UAT untuk sesi ini');
+    const html = buildHtml({ sesi, tpl, items, fail });
+    const sourceHtmlSha256 = hashPdf(new TextEncoder().encode(html));
+    let render;
+    try { render = await c.env.BROWSER.quickAction('pdf', { html }); }
+    catch (error) {
+      console.error('qamanager_pdf_preview_renderer', error?.message || 'Browser Run error');
+      fail(503, 'Browser Run tidak dapat menampilkan pratinjau PDF');
+    }
+    if (!render?.ok || typeof render.arrayBuffer !== 'function') fail(502, 'Browser Run gagal mengembalikan pratinjau PDF');
+    const data = new Uint8Array(await render.arrayBuffer());
+    if (data.length > MAX_OUTPUT_BYTES) fail(413, 'PDF melebihi batas ' + formatSize(MAX_OUTPUT_BYTES));
+    const info = await pdfInfo(data, fail);
+    // A session can change while PDF renders. Never present a stale preview as current.
+    const current = await first(c, 'SELECT revision,status FROM ulo_sesi WHERE id=$1', [sid]);
+    if (!isPdfSnapshotCurrent(sourceRevision, sourceStatus, current)) {
+      fail(409, 'Sesi berubah saat pratinjau dibuat. Muat ulang dan pratinjau kembali');
+    }
+    return new Response(data, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Length': String(data.length),
+        'Content-Disposition': 'inline; filename="pratinjau-sesi-' + sid + '.pdf"',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Pdf-Preview-Sha256': sourceHtmlSha256,
+        'X-Pdf-Preview-Revision': String(sourceRevision),
+        'X-Pdf-Preview-Status': sourceStatus,
+        'X-Pdf-Preview-Pages': String(info.pageCount)
+      }
+    });
+  });
+
   app.post('/api/sesi/:sesiId/pdf', async c => {
     const projectId = await guard(c, 'sesiId', ['ADMIN', 'TESTER']);
     const sid = id(c.req.param('sesiId'));
@@ -192,6 +244,19 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     if(!Number.isSafeInteger(sourceRevision)||sourceRevision<1)fail(409,'Sesi memerlukan revisi yang valid');
     const html = buildHtml({ sesi, tpl, items, fail });
     const sourceHtmlSha256=hashPdf(new TextEncoder().encode(html));
+    // Optional compatibility-safe guard: the UI only persists a PDF that matches
+    // the exact session snapshot reviewed in its ephemeral preview.
+    const previewInput = await c.req.json().catch(() => ({}));
+    if (previewInput && (previewInput.preview_html_sha256 !== undefined ||
+        previewInput.expected_revision !== undefined || previewInput.expected_status !== undefined)) {
+      const valid = typeof previewInput.preview_html_sha256 === 'string' &&
+        /^[a-f0-9]{64}$/.test(previewInput.preview_html_sha256) &&
+        previewInput.preview_html_sha256 === sourceHtmlSha256 &&
+        Number.isSafeInteger(previewInput.expected_revision) &&
+        previewInput.expected_revision === sourceRevision &&
+        previewInput.expected_status === sourceStatus;
+      if (!valid) fail(409, 'Sesi atau isi PDF berubah sejak pratinjau. Buat pratinjau ulang');
+    }
     let render;
     const renderStartedAt = Date.now();
     try { render = await c.env.BROWSER.quickAction('pdf', { html }); }
