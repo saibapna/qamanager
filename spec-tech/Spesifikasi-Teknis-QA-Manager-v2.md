@@ -24,7 +24,7 @@
 
 ## 2. Topologi target
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
  U[Browser React/Vite] -->|TLS + secure cookie| E[Cloudflare Worker Router]
  E --> H[Hono /api/v1 + /api/v2]
@@ -40,9 +40,9 @@ flowchart LR
  H --> LIVE[ProjectLive Durable Object]
  H --> O[Structured logs / metrics]
  PDF --> S
-\`\`\`
+```
 
-**Existing observed:** Worker entrypoint \`admin-ui/worker/index.ts\` menyajikan React SPA dan merutekan \`/api/*\` ke Hono; fallback deep link harus selalu \`text/html\`, tidak boleh memaksa download. \`admin-ui/functions/api/[[path]].js\` menangani koneksi Hyperdrive, auth/cookie, dan modul workflow. Existing domain \`ulo_uat\` sudah memuat projects, templates, aplikasi, sessions, test plan, defects, retests, evidence, approvals, audit events. \`PROJECT_LIVE\` Durable Object terlihat dalam kode; implementasi event realtime harus diuji setelah commit transaksi.
+**Existing observed:** Worker entrypoint `admin-ui/worker/index.ts` menyajikan React SPA dan merutekan `/api/*` ke Hono; fallback deep link harus selalu `text/html`, tidak boleh memaksa download. `admin-ui/functions/api/[[path]].js` menangani koneksi Hyperdrive, auth/cookie, dan modul workflow. Existing domain `ulo_uat` sudah memuat projects, templates, aplikasi, sessions, test plan, defects, retests, evidence, approvals, audit events. `PROJECT_LIVE` Durable Object terlihat dalam kode; implementasi event realtime harus diuji setelah commit transaksi.
 
 **Tidak diwajibkan:** microservices, Kafka, Kubernetes, D1, server baru, atau rewrite Express. Express tetap legacy untuk dev/compatibility, tidak menerima domain baru sebagai source of truth.
 
@@ -55,7 +55,7 @@ flowchart LR
 - **Observability:** metrics, redacted structured events, alerts, audit export.
 
 Struktur direktori target:
-\`\`\`text
+```text
 admin-ui/
   src/
     app/           # router, query client, error boundary
@@ -82,33 +82,33 @@ api-docs/
   openapi-v2.yaml
 prd/
 spec-tech/
-\`\`\`
+```
 Folder target tidak perlu dibuat sekaligus; pindahkan modul dengan karakterisasi tes dan route parity.
 
 ## 3. Multi-tenancy dan identitas organisasi
 
 ### 3.1 Model tenancy
-Satu tenant = satu boundary kontraktual dan akses data; tidak otomatis sama dengan satu OPD. \`tenant_id UUID\` baru berelasi dengan \`org_units\`, \`projects\`, \`users\` melalui \`tenant_memberships\`. Pengguna dapat menjadi anggota beberapa tenant, tetapi seluruh query scoped ke **tenant aktif yang diverifikasi di server**.
+Satu tenant = satu boundary kontraktual dan akses data; tidak otomatis sama dengan satu OPD. `tenant_id UUID` baru berelasi dengan `org_units`, `projects`, `users` melalui `tenant_memberships`. Pengguna dapat menjadi anggota beberapa tenant, tetapi seluruh query scoped ke **tenant aktif yang diverifikasi di server**.
 
 Kebijakan:
-1. \`tenant_id\` bukan input yang dipercaya dari body; ambil dari resource dan membership.
+1. `tenant_id` bukan input yang dipercaya dari body; ambil dari resource dan membership.
 2. Semua route menolak missing/invalid membership, termasuk download, bulk export, PDF, event-stream, dan soft-delete.
 3. Semua relasi project/resource memakai composite FK atau guarded transaction untuk mencegah relasi lintas tenant.
-4. Jangan mengandalkan \`WHERE project_id = :id\` tanpa membership check.
-5. Referensi 64-bit di API JSON berupa **string** jika melebihi \`Number.MAX_SAFE_INTEGER\`; UUID direkomendasikan untuk entitas baru.
+4. Jangan mengandalkan `WHERE project_id = :id` tanpa membership check.
+5. Referensi 64-bit di API JSON berupa **string** jika melebihi `Number.MAX_SAFE_INTEGER`; UUID direkomendasikan untuk entitas baru.
 6. Admin platform tidak otomatis mengakses evidence tenant; support access harus time-bound, explicit approval, audit.
 7. Setiap pergantian tenant menutup cache, subscription dan stale query data pada UI.
 
 ### 3.2 Gap security existing (harus ditangani sebelum produksi multi-tenant)
-Migration existing memberi policy \`qamanager_backend_access USING(true)\` untuk role SQL \`qamanager_web\`, sehingga **RLS tersebut bukan per-tenant policy**. RBAC API saat ini memeriksa \`project_members\`, tetapi migrasi enterprise memerlukan defense-in-depth:
+Migration existing memberi policy `qamanager_backend_access USING(true)` untuk role SQL `qamanager_web`, sehingga **RLS tersebut bukan per-tenant policy**. RBAC API saat ini memeriksa `project_members`, tetapi migrasi enterprise memerlukan defense-in-depth:
 - Kunci semua endpoint dan JOIN dengan scope project/tenant.
-- Beri DB role \`qamanager_web\` privilege minimum, bukan table owner/BYPASSRLS.
-- Untuk RLS per-tenant, gunakan \`SET LOCAL app.tenant_id\` **di dalam transaksi dengan dedicated client** dan policy \`tenant_id = nullif(current_setting('app.tenant_id', true),'')::uuid\` untuk tabel v2. Pastikan \`SET LOCAL\` tidak bocor antar request/pool; jangan menerapkan RLS v2 pada tabel legacy sebelum kompatibilitas teruji.
-- Backfill \`tenant_id\` per project berdasar mapping resmi; tidak boleh menebak tenant pemilik data.
+- Beri DB role `qamanager_web` privilege minimum, bukan table owner/BYPASSRLS.
+- Untuk RLS per-tenant, gunakan `SET LOCAL app.tenant_id` **di dalam transaksi dengan dedicated client** dan policy `tenant_id = nullif(current_setting('app.tenant_id', true),'')::uuid` untuk tabel v2. Pastikan `SET LOCAL` tidak bocor antar request/pool; jangan menerapkan RLS v2 pada tabel legacy sebelum kompatibilitas teruji.
+- Backfill `tenant_id` per project berdasar mapping resmi; tidak boleh menebak tenant pemilik data.
 - Uji SQL injection, lateral joins, subqueries, output PDF, storage metadata, dan filter ekspor.
 
 ### 3.3 RBAC + ABAC
-Role baseline legacy \`ADMIN,TESTER,WITNESS,APPROVER,AUDITOR\` tetap didukung, lalu tambahkan granular **permissions** dan **assignments** ber-scope; \`platform_admin\` terpisah. Action DSL: \`qa.control.review\`, \`qa.finding.verify\`, \`qc.run.execute\`, \`defect.resolve\`, \`risk.accept\`, \`uat.witness.approve\`, \`uat.owner.accept\`, \`release.approve\`, \`evidence.read\`, \`audit.export\`.
+Role baseline legacy `ADMIN,TESTER,WITNESS,APPROVER,AUDITOR` tetap didukung, lalu tambahkan granular **permissions** dan **assignments** ber-scope; `platform_admin` terpisah. Action DSL: `qa.control.review`, `qa.finding.verify`, `qc.run.execute`, `defect.resolve`, `risk.accept`, `uat.witness.approve`, `uat.owner.accept`, `release.approve`, `evidence.read`, `audit.export`.
 
 | Operasi | QA Lead | QC Lead/Tester | Developer | Business Owner | Security | Auditor |
 |---|---|---|---|---|---|---|
@@ -127,11 +127,11 @@ Legenda: C/U create/update; R read; A approval. Ini **contoh kebijakan**, bukan 
 ## 4. Model data target
 
 ### 4.1 Existing entities yang dipertahankan
-\`ulo_uat.projects\`, \`aplikasi\`, \`templates\`, \`test_plan_items\`, \`ulo_sesi\`, \`ulo_item\`, \`ulo_defects\`, \`ulo_retests\`, \`ulo_evidence\`, \`ulo_approvals\`, \`ulo_output\`, \`template_fixtures\`, \`project_members\`, \`users\`, \`audit_events\`. Integritas dan status historis harus dipertahankan saat upgrade. Jangan menghapus data sesi FINAL/SIGNED lama atau mengubah PASS/FAIL-nya.
+`ulo_uat.projects`, `aplikasi`, `templates`, `test_plan_items`, `ulo_sesi`, `ulo_item`, `ulo_defects`, `ulo_retests`, `ulo_evidence`, `ulo_approvals`, `ulo_output`, `template_fixtures`, `project_members`, `users`, `audit_events`. Integritas dan status historis harus dipertahankan saat upgrade. Jangan menghapus data sesi FINAL/SIGNED lama atau mengubah PASS/FAIL-nya.
 
 ### 4.2 New entities: minimum viable schema outline
 
-| Table (schema \`ulo_uat\` atau schema domain privat) | Field penting | Constraints / index |
+| Table (schema `ulo_uat` atau schema domain privat) | Field penting | Constraints / index |
 |---|---|---|
 | tenants | id UUID, code, name, state, data_region_policy | UNIQUE(code) |
 | org_units | id, tenant_id, parent_id, code, name | UNIQUE(tenant_id,code), parent tenant check |
@@ -164,11 +164,11 @@ Legenda: C/U create/update; R read; A approval. Ini **contoh kebijakan**, bukan 
 | artifact_retention | artifact_id, policy_id, retain_until, hold_until, purge_state | lifecycle guard |
 | idempotency_keys | scope_id, key_hash, route, request_hash, response_ref, expires_at | UNIQUE(scope_id,key_hash) |
 
-**Modeling rule:** Field \`tenant_id\` di semua tabel v2 berisi immutable ownership, \`project_id\` selalu punya tenant yang sama, foreign key tidak \`ON DELETE CASCADE\` untuk data audit/resmi. Reference baru **UUID** dapat digunakan tanpa mengubah legacy bigint. \`status\` dilengkapi CHECK atau enum migration-controlled; timestamps UTC di DB; display timezone Asia/Jakarta berdasarkan locale pengguna.
+**Modeling rule:** Field `tenant_id` di semua tabel v2 berisi immutable ownership, `project_id` selalu punya tenant yang sama, foreign key tidak `ON DELETE CASCADE` untuk data audit/resmi. Reference baru **UUID** dapat digunakan tanpa mengubah legacy bigint. `status` dilengkapi CHECK atau enum migration-controlled; timestamps UTC di DB; display timezone Asia/Jakarta berdasarkan locale pengguna.
 
 ### 4.3 Skeleton DDL (ilustratif, bukan migrasi siap-jalankan)
 
-\`\`\`sql
+```sql
 CREATE TABLE ulo_uat.tenants (
   id uuid PRIMARY KEY,
   code text NOT NULL UNIQUE,
@@ -212,7 +212,7 @@ CREATE TABLE ulo_uat.gate_evaluations (
 );
 CREATE INDEX idx_gate_eval_project_at
   ON ulo_uat.gate_evaluations(project_id,evaluated_at DESC);
-\`\`\`
+```
 
 Sebelum produksi: tambah ownership/composite FK, RLS, grants, audit triggers, migration tracking dan index berdasarkan query plan. SQL di atas tidak menerapkan semuanya.
 
@@ -220,25 +220,25 @@ Sebelum produksi: tambah ownership/composite FK, RLS, grants, audit triggers, mi
 Untuk mutasi business-critical:
 1. Mulai transaksi pada dedicated PostgreSQL client.
 2. Ambil lock baris project/entity; validasi tenant membership + permission + current revision.
-3. Mutasi domain dengan \`WHERE id=$1 AND revision=$2\` / \`SELECT ... FOR UPDATE\`.
-4. Tulis \`audit_events\` dan \`outbox_events\` **dalam transaksi yang sama**, bukan setelah commit.
+3. Mutasi domain dengan `WHERE id=$1 AND revision=$2` / `SELECT ... FOR UPDATE`.
+4. Tulis `audit_events` dan `outbox_events` **dalam transaksi yang sama**, bukan setelah commit.
 5. Commit; baru publish realtime/queue via outbox dispatcher. Retries tetap idempotent.
-6. Pada conflict versi, balas \`409 REVISION_CONFLICT\`; UI wajib refresh snapshot.
+6. Pada conflict versi, balas `409 REVISION_CONFLICT`; UI wajib refresh snapshot.
 
-Setiap audit event: \`event_id\`, \`tenant_id\`, \`project_id\`, \`actor_id\`, \`action\`, \`entity_id\`, \`entity_revision\`, \`occurred_at\`, \`correlation_id\`, \`request_id\`, \`source_ip_hash\` (bukan IP mentah bila tak perlu), \`before_hash\`, \`after_hash\`, \`change_summary_redacted\`. Audit append-only; chain digest periodik diekspor ke boundary independen setelah disetujui untuk deteksi manipulasi yang lebih kuat.
+Setiap audit event: `event_id`, `tenant_id`, `project_id`, `actor_id`, `action`, `entity_id`, `entity_revision`, `occurred_at`, `correlation_id`, `request_id`, `source_ip_hash` (bukan IP mentah bila tak perlu), `before_hash`, `after_hash`, `change_summary_redacted`. Audit append-only; chain digest periodik diekspor ke boundary independen setelah disetujui untuk deteksi manipulasi yang lebih kuat.
 
 ## 5. API Design Contract
 
 ### 5.1 Versi dan standar
-- **Existing:** \`/api/*\` Hono saat ini tetap dipertahankan sebagai compatibility façade (lihat \`api-docs/openapi.yaml\`).
-- **Target:** \`/api/v2/*\` berkontrak OpenAPI 3.1; DTO zod/types dihasilkan dan teruji.
-- JSON UTF-8, timestamp ISO-8601 UTC, ID string untuk UUID dan bigint; default \`limit=25\`, maximum \`limit=100\`; cursor pagination stabil (\`id,created_at\`), filter whitelist.
-- Required mutation headers: \`X-Requested-With: XMLHttpRequest\` untuk cookie-authenticated requests di compatibility mode, \`X-Request-ID\`, \`Idempotency-Key\` untuk create/finalize/approval; CSRF guard sesuai mekanisme teruji.
-- Auth cookie HttpOnly + Secure + SameSite; server-side permission; never trust \`tenantId\` dari payload.
+- **Existing:** `/api/*` Hono saat ini tetap dipertahankan sebagai compatibility façade (lihat `api-docs/openapi.yaml`).
+- **Target:** `/api/v2/*` berkontrak OpenAPI 3.1; DTO zod/types dihasilkan dan teruji.
+- JSON UTF-8, timestamp ISO-8601 UTC, ID string untuk UUID dan bigint; default `limit=25`, maximum `limit=100`; cursor pagination stabil (`id,created_at`), filter whitelist.
+- Required mutation headers: `X-Requested-With: XMLHttpRequest` untuk cookie-authenticated requests di compatibility mode, `X-Request-ID`, `Idempotency-Key` untuk create/finalize/approval; CSRF guard sesuai mekanisme teruji.
+- Auth cookie HttpOnly + Secure + SameSite; server-side permission; never trust `tenantId` dari payload.
 - Successful create: 201 + resource ID; async create: 202 + job ID; update: 200/204; conflicts 409; validation 422; unauth 401; forbidden 403 atau 404 (resource masking); 429 throttle; 500 tanpa stack/secrets.
 
 Error JSON standar:
-\`\`\`json
+```json
 {
   "error": {
     "code": "GATE_BLOCKED",
@@ -247,11 +247,11 @@ Error JSON standar:
     "requestId": "opaque-correlation-id"
   }
 }
-\`\`\`
+```
 
 ### 5.2 Endpoint target (semuanya TARGET baru kecuali route v1 dicatat existing)
 
-| Domain | Method & path (v2, prefix \`/api/v2\`) | Permission / semantics |
+| Domain | Method & path (v2, prefix `/api/v2`) | Permission / semantics |
 |---|---|---|
 | Identity | GET /me; GET /tenants; POST /tenants/:id/switch | Membership-bound; switch mengembalikan scoped context |
 | Org | GET/POST /tenants/:id/org-units; PATCH /org-units/:id | tenant.manage |
@@ -284,7 +284,7 @@ Error JSON standar:
 | Audit | GET /projects/:id/audit-events; POST /projects/:id/audit-exports | audit.read/export |
 | Dashboard | GET /projects/:id/qa-metrics; GET /projects/:id/qc-metrics | scoped read with metric metadata |
 
-**Contoh create defect:** \`POST /api/v2/projects/{projectId}/defects\` membawa \`testResultId\`, \`title\`, \`severity\`, \`priority\`, \`ownerId\` opsional. Service memeriksa hasil FAIL, tenant, uniqueness per failure event/idempotency key, lalu membuat defect + audit/outbox atomik. **Tidak** membiarkan \`ownerId\` dari project lain.
+**Contoh create defect:** `POST /api/v2/projects/{projectId}/defects` membawa `testResultId`, `title`, `severity`, `priority`, `ownerId` opsional. Service memeriksa hasil FAIL, tenant, uniqueness per failure event/idempotency key, lalu membuat defect + audit/outbox atomik. **Tidak** membiarkan `ownerId` dari project lain.
 
 ### 5.3 API acceptance
 Semua endpoint wajib contract tests dari OpenAPI; schema request/response, role-matrix, negative tenancy, idempotency duplicate/replay, CSRF, oversized upload, missing evidence, dan version conflict. GET/export harus diuji terhadap data project yang bukan membership caller.
@@ -292,17 +292,17 @@ Semua endpoint wajib contract tests dari OpenAPI; schema request/response, role-
 ## 6. State machines dan policy engine
 
 ### 6.1 Distinct states
-- QA finding: \`OPEN → ACTION_PLANNED → IMPLEMENTED → VERIFIED / REOPENED\`.
-- QC result: \`NOT_RUN / PASS / FAIL / BLOCKED / NOT_APPLICABLE\` per *attempt*; bukan status defect.
-- Defect: \`OPEN → IN_PROGRESS → FIXED → VERIFIED / REOPENED\`; \`WAIVED\` pengecualian terdokumentasi.
-- UAT legacy: \`BELUM/PASS/FAIL\`, \`DRAFT/FINAL/SIGNED\`; bridge mapper menjaga snapshot historis.
-- Release: \`DRAFT → CANDIDATE → REVIEWED → APPROVED → DEPLOYED → VERIFIED / ROLLED_BACK\`.
-- Gate: \`NOT_EVALUATED\`, \`FAIL\`, \`PASS_WITH_ACCEPTED_RISK\`, \`PASS\`.
+- QA finding: `OPEN → ACTION_PLANNED → IMPLEMENTED → VERIFIED / REOPENED`.
+- QC result: `NOT_RUN / PASS / FAIL / BLOCKED / NOT_APPLICABLE` per *attempt*; bukan status defect.
+- Defect: `OPEN → IN_PROGRESS → FIXED → VERIFIED / REOPENED`; `WAIVED` pengecualian terdokumentasi.
+- UAT legacy: `BELUM/PASS/FAIL`, `DRAFT/FINAL/SIGNED`; bridge mapper menjaga snapshot historis.
+- Release: `DRAFT → CANDIDATE → REVIEWED → APPROVED → DEPLOYED → VERIFIED / ROLLED_BACK`.
+- Gate: `NOT_EVALUATED`, `FAIL`, `PASS_WITH_ACCEPTED_RISK`, `PASS`.
 
-Policy tidak boleh mengevaluasi status \`SIGNED\` sebagai bukti PSrE tersertifikasi. Mutasi pasca-approval menghasilkan revision baru dan menginvalidasi approval versi sebelumnya untuk operasi selanjutnya.
+Policy tidak boleh mengevaluasi status `SIGNED` sebagai bukti PSrE tersertifikasi. Mutasi pasca-approval menghasilkan revision baru dan menginvalidasi approval versi sebelumnya untuk operasi selanjutnya.
 
 ### 6.2 Gate policy JSON (versi contoh)
-\`\`\`json
+```json
 {
   "policyCode": "G6_RELEASE",
   "version": 1,
@@ -316,53 +316,53 @@ Policy tidak boleh mengevaluasi status \`SIGNED\` sebagai bukti PSrE tersertifik
     {"id": "RESTORE_PLAN", "source": "release", "op": "hasRollbackPlan", "block": true}
   ]
 }
-\`\`\`
-Semua operator adalah whitelist pure functions, **bukan** eval JavaScript, SQL templating, atau kode dari UI. Evaluasi memeriksa snapshot ber-\`revision\` tetap, \`policy checksum\`, \`evidence hash\`, lalu menyimpan \`gate_evaluations\` meskipun FAIL. Penentuan threshold tergantung profil risiko instansi, angka 0.95 hanya contoh, tidak jadi default wajib tanpa keputusan.
+```
+Semua operator adalah whitelist pure functions, **bukan** eval JavaScript, SQL templating, atau kode dari UI. Evaluasi memeriksa snapshot ber-`revision` tetap, `policy checksum`, `evidence hash`, lalu menyimpan `gate_evaluations` meskipun FAIL. Penentuan threshold tergantung profil risiko instansi, angka 0.95 hanya contoh, tidak jadi default wajib tanpa keputusan.
 
 ### 6.3 Integrity gate UAT legacy
-Pertahankan \`assertCanonicalItems\`, \`checkFinalization\`, \`checkApprovalState\` pada \`workflow-core.js\` sebagai kontrak karakterisasi. Existing logic mewajibkan semua item definitif dan defect VERIFIED atau WAIVED; \`WAIVED\` tetap \`FAIL\`; ketentuan X1–X5 hanya aktif per project. Tidak boleh shortcut dengan API bulk item update untuk mengubah FAIL menjadi PASS.
+Pertahankan `assertCanonicalItems`, `checkFinalization`, `checkApprovalState` pada `workflow-core.js` sebagai kontrak karakterisasi. Existing logic mewajibkan semua item definitif dan defect VERIFIED atau WAIVED; `WAIVED` tetap `FAIL`; ketentuan X1–X5 hanya aktif per project. Tidak boleh shortcut dengan API bulk item update untuk mengubah FAIL menjadi PASS.
 
 ## 7. Evidence, PDF, storage, dan chain of custody
 
 ### 7.1 Penyimpanan objek
-Implementasikan interface \`ObjectStore\`: \`put({tenantId,classification,bytes,sha256})\`, \`getAuthorized(objectId,principal)\`, \`markDeleted(objectId,reason)\`, \`verifyHash(objectId)\`, \`lifecycle(objectId)\`, \`health()\`.
+Implementasikan interface `ObjectStore`: `put({tenantId,classification,bytes,sha256})`, `getAuthorized(objectId,principal)`, `markDeleted(objectId,reason)`, `verifyHash(objectId)`, `lifecycle(objectId)`, `health()`.
 
-**Existing interim:** private PostgreSQL \`bytea\` pada \`ulo_evidence\` dan PDF/fixture dengan batas ukuran/kouta; file soft-delete tetap memakai kuota. **Target production:** private Cloudflare R2 setelah binding, akses, lokasi data, lifecycle, backup, dan restore diuji. Metadata searchable tetap di PostgreSQL. Jangan menampilkan R2 public URL atau credential.
+**Existing interim:** private PostgreSQL `bytea` pada `ulo_evidence` dan PDF/fixture dengan batas ukuran/kuota; file soft-delete tetap memakai kuota. **Target production:** private Cloudflare R2 setelah binding, akses, lokasi data, lifecycle, backup, dan restore diuji. Metadata searchable tetap di PostgreSQL. Jangan menampilkan R2 public URL atau credential.
 
-Object key generated server-side: \`tenants/<tenant-uuid>/projects/<project-id>/<type>/<random-uuid>/<sha256>\`; jangan gunakan filename user sebagai path. Atur status \`PENDING_UPLOAD → QUARANTINED → AVAILABLE / REJECTED / DELETED / PURGED\`; izinkan hanya PDF/PNG/JPEG pada UAT legacy; ekstensi tambahan melalui allowlist; validasi magic bytes dan antivirus/scanning bila tersedia. Untuk storage adapter masa transisi, gunakan strict quota per tenant/project/object dan transfer berizin melalui backend.
+Object key generated server-side: `tenants/<tenant-uuid>/projects/<project-id>/<type>/<random-uuid>/<sha256>`; jangan gunakan filename user sebagai path. Atur status `PENDING_UPLOAD → QUARANTINED → AVAILABLE / REJECTED / DELETED / PURGED`; izinkan hanya PDF/PNG/JPEG pada UAT legacy; ekstensi tambahan melalui allowlist; validasi magic bytes dan antivirus/scanning bila tersedia. Untuk storage adapter masa transisi, gunakan strict quota per tenant/project/object dan transfer berizin melalui backend.
 
 **Upload flow:**
-1. Mint \`upload_intent\` setelah permission, ownership, content type, quota dan classification check.
+1. Mint `upload_intent` setelah permission, ownership, content type, quota dan classification check.
 2. Upload privat; uji content hash, real MIME dan ukuran aktual; reject mismatch.
 3. Scan sesuai kapasitas; karantina sampai lengkap. Jangan render HTML/SVG aktif dalam browser.
-4. Transaksi metadata \`AVAILABLE\` + audit/outbox; tangani orphan object lewat reconciler.
-5. Download via Worker dengan AuthZ fresh setiap permintaan; headers \`Content-Disposition: attachment\`, \`Cache-Control: private,no-store\`, \`X-Content-Type-Options: nosniff\`.
+4. Transaksi metadata `AVAILABLE` + audit/outbox; tangani orphan object lewat reconciler.
+5. Download via Worker dengan AuthZ fresh setiap permintaan; headers `Content-Disposition: attachment`, `Cache-Control: private,no-store`, `X-Content-Type-Options: nosniff`.
 6. Hapus = tombstone, tidak benar-benar purge selama legal hold/retensi. Purge memerlukan job, approval, audit dan bukti hasil.
 
 **Regulasi dan lokasi:** jangan berasumsi penyimpanan R2 di region tertentu otomatis memenuhi seluruh kewajiban data pemerintah. Ada proses klasifikasi data, penilaian cloud/supplier, kontrak, enkripsi, kunci, data residency, dan keputusan unit berwenang.
 
 ### 7.2 PDF report
 Engine legacy Cloudflare Browser Run untuk rendering; setiap laporan memakai **snapshot immutable** dari input, template revision, style assets, actor/approval. Cegah render-to-output race:
-- Catat \`source_revision\`, \`template_checksum\`, \`policy_checksum\` sebelum render.
+- Catat `source_revision`, `template_checksum`, `policy_checksum` sebelum render.
 - Render PDF, hitung SHA-256, jumlah halaman, waktu.
-- Transaksi penyimpanan output memverifikasi \`source_revision\` saat commit; bila berubah, discard hasil stale.
+- Transaksi penyimpanan output memverifikasi `source_revision` saat commit; bila berubah, discard hasil stale.
 - Simpan versi hasil dan metadata; jangan replace output final.
 - Browser Run tidak mendapat cookie pengguna; gunakan internal signed render token scoped, TTL singkat, satu kali jika memungkinkan.
 
 **Pembandingan 1:1:** official baseline (diunggah pemilik dokumen, izin penggunaan, hash/versi) dibandingkan berdasarkan teks, dimensi/layout, jumlah halaman **fisik**, raster DPI sama, deterministic fonts, SSIM per halaman, pixel diff mask/heatmap. SHA-256 **bukan** bukti sama visual. Angka PRD lama SSIM >= 0.999 dan halaman 5 merupakan **acceptance khusus template tersebut**, bergantung pada fixture resmi. Synthetic fixtures hanya membuktikan comparator bekerja.
 
-**Performa:** uji benchmark 71 kasus dengan ukuran representatif; p95 target awal <30 detik via async queue (bukan blocking HTTP panjang), angka 5 detik lama adalah target aspiratif yang belum terbukti. Jobs state \`QUEUED/RUNNING/COMPLETE/FAILED/RETRYING\`, retries idempotent dan dead-letter runbook.
+**Performa:** uji benchmark 71 kasus dengan ukuran representatif; p95 target awal <30 detik via async queue (bukan blocking HTTP panjang), angka 5 detik lama adalah target aspiratif yang belum terbukti. Jobs state `QUEUED/RUNNING/COMPLETE/FAILED/RETRYING`, retries idempotent dan dead-letter runbook.
 
 ### 7.3 Signatures / decisions
-Simpan keputusan in-app \`actor_id\`, \`role_assignment_id\`, \`decision\`, \`timestamp\`, \`document_sha256\`, \`source_revision\`, \`challenge_method\` untuk audit internal. Bila diperlukan **tanda tangan elektronik tersertifikasi**, gunakan adapter PSrE berwenang dengan validasi sertifikat, signature payload, hash, timestamp, dan revocation/status; jangan menampilkan "tersertifikasi" sebelum verifikasi. BAST adalah dokumen dan keputusan administratif dalam alur terpisah; sistem boleh mengarsipkannya, bukan menerbitkan kewenangan PPK.
+Simpan keputusan in-app `actor_id`, `role_assignment_id`, `decision`, `timestamp`, `document_sha256`, `source_revision`, `challenge_method` untuk audit internal. Bila diperlukan **tanda tangan elektronik tersertifikasi**, gunakan adapter PSrE berwenang dengan validasi sertifikat, signature payload, hash, timestamp, dan revocation/status; jangan menampilkan "tersertifikasi" sebelum verifikasi. BAST adalah dokumen dan keputusan administratif dalam alur terpisah; sistem boleh mengarsipkannya, bukan menerbitkan kewenangan PPK.
 
 ## 8. Auth, privacy, dan security specification
 
-**Existing observed:** cookie \`qa_access\` / \`qa_refresh\` HttpOnly Secure SameSite=Strict, JWT 15 menit / refresh 7 hari, refresh revocation, per-IP/per-akun throttle, PBKDF2-SHA256 100.000 pada Workers, minimum password baru 16 karakter. Legacy Argon2 hanya kompatibilitas sisi Express. JWT secrets berbeda per jenis dan disimpan server-side.
+**Existing observed:** cookie `qa_access` / `qa_refresh` HttpOnly Secure SameSite=Strict, JWT 15 menit / refresh 7 hari, refresh revocation, per-IP/per-akun throttle, PBKDF2-SHA256 100.000 pada Workers, minimum password baru 16 karakter. Legacy Argon2 hanya kompatibilitas sisi Express. JWT secrets berbeda per jenis dan disimpan server-side.
 
 **Target hardening:**
 - Authenticate identity + project membership + specific permission + object scope pada **setiap** endpoint dan download.
-- Gunakan admin invitation/SSO secara bertahap; jangan mengirim plaintext password pada \`POST members\` untuk produksi tanpa kanal enrollment yang aman. Tidak ada akun demo di publik.
+- Gunakan admin invitation/SSO secara bertahap; jangan mengirim plaintext password pada `POST members` untuk produksi tanpa kanal enrollment yang aman. Tidak ada akun demo di publik.
 - Untuk MFA/SSO, OIDC dengan issuer, audience, nonce, PKCE, JWKS caching dan logout session; legacy lokal tetap dibatasi.
 - Tambahkan authenticator phishing-resistant untuk admin sensitif jika organisasi mensyaratkan.
 - Access-token expiry, session revocation, refresh replay detection, safe CSRF double-submit / origin guard, request body limits dan throttling yang dibuktikan pada Cloudflare.
@@ -378,7 +378,7 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 ## 9. Frontend UX dan information architecture
 
 ### 9.1 Sitemap target
-\`\`\`text
+```text
 /sign-in
 /tenants                     # authorized tenant switch
 /dashboard                   # portfolio QA/QC cards with separate metrics
@@ -402,9 +402,9 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 /projects/:id/audit
 /projects/:id/settings
 /admin/tenants               # platform ops only
-\`\`\`
+```
 
-**Legacy routes preserved:** \`/projects\`, \`/projects/:id\`, \`/projects/:id/manage\`, \`/templates/:id\`, \`/sesi/:id\`, \`/validate\` and PDF diff routes. Add redirects only after permission-sensitive route tests.
+**Legacy routes preserved:** `/projects`, `/projects/:id`, `/projects/:id/manage`, `/templates/:id`, `/sesi/:id`, `/validate` and PDF diff routes. Add redirects only after permission-sensitive route tests.
 
 ### 9.2 Component standards
 - Bahasa Indonesia utama; glossary QA/QC/ULO/UAT/PPK, label "Disetujui di aplikasi" vs "Ditandatangani secara tersertifikasi".
@@ -421,7 +421,7 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 ### 10.1 Metrics and logs
 - Request duration p50/p95/p99 by route, 4xx/5xx, 401/403 anomalies, SQL timeout, pool saturation, PDF queue delay/render duration/failure, R2 storage quota, event delivery lag.
 - Business metrics: count gate FAIL, waiver, overdue CAPA/defect, unsigned UAT revisions, rejected approvals.
-- Structured log fields: \`time, level, requestId, tenantHash, projectId, actorId, route, responseStatus, latencyMs, errorCode, buildSha\`; no plaintext credentials/PII.
+- Structured log fields: `time, level, requestId, tenantHash, projectId, actorId, route, responseStatus, latencyMs, errorCode, buildSha`; no plaintext credentials/PII.
 - Alert thresholds proposed: 5xx > 2% over 5 min, auth burst abnormal, PDF failure > 5% / 15 min, backup > 24h old, restore drill overdue, R2 quota >= 80%; tune after baseline pilot.
 - Workflow already includes scheduled production API smoke and browser smoke; build/health is insufficient for business readiness.
 
@@ -433,7 +433,7 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 - Retention is per classification/object type and authorized retention policy; default 5-year audit claim from PRD v1 must be validated by legal/records management. Legal hold blocks purge.
 
 ### 10.3 Environment topology
-\`development\` (test data only), \`staging\` (isolated DB bucket and secrets), \`production\` (controlled data). No production PII in CI fixtures. Verify Worker bindings at deployment, especially HYPERDRIVE, JWT secrets, BROWSER, optional PROJECT_LIVE, R2. Staging and production cannot share write-capable DB or storage. Check Cloudflare product availability and paid feature quotas before enabling async/PDF/R2.
+`development` (test data only), `staging` (isolated DB bucket and secrets), `production` (controlled data). No production PII in CI fixtures. Verify Worker bindings at deployment, especially HYPERDRIVE, JWT secrets, BROWSER, optional PROJECT_LIVE, R2. Staging and production cannot share write-capable DB or storage. Check Cloudflare product availability and paid feature quotas before enabling async/PDF/R2.
 
 ## 11. CI/CD and Quality Gates (software QA of QA Manager itself)
 
@@ -470,20 +470,20 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 
 ## 12. Deployment and migration roadmap (no big-bang)
 
-**Phase 0 — Characterize existing, protect data.** Pin \`main\` baseline; export schema + sanitized representative data, record existing 71-item/approval/PDF behavior, snapshot constraints and current policy. Verify master audit issue #4 checklist against new evidence instead of assuming all closed.
+**Phase 0 — Characterize existing, protect data.** Pin `main` baseline; export schema + sanitized representative data, record existing 71-item/approval/PDF behavior, snapshot constraints and current policy. Verify master audit issue #4 checklist against new evidence instead of assuming all closed.
 
 **Phase 1 — Hardening first.** Correctly verify existing RBAC, all file routes, multi-role E2E, immutable audit, email/identity enrollment, official PDF fixture, R2 decision, backup/restore. Fix defects without renaming public API or breaking UAT.
 
-**Phase 2 — Additive tenant + governance schema.** Create \`tenants\`, \`projects_v2_meta\`, \`requirements\`, \`qa_plans\`, \`qa_controls\`, \`qa_reviews\`, \`qa_findings\`, \`corrective_actions\`, \`risk_register\`. Build backfill report project→tenant for manual approval; migrate in batches with idempotent scripts; no cascading delete.
+**Phase 2 — Additive tenant + governance schema.** Create `tenants`, `projects_v2_meta`, `requirements`, `qa_plans`, `qa_controls`, `qa_reviews`, `qa_findings`, `corrective_actions`, `risk_register`. Build backfill report project→tenant for manual approval; migrate in batches with idempotent scripts; no cascading delete.
 
-**Phase 3 — Generic QC.** Add \`test_plans\`, \`test_case_versions\`, \`test_runs\`, \`test_results\`, defect metadata and traceability. Map legacy ULO/UAT via views/read adapters; do not copy or overwrite historical results. Add UI, metric source definitions and conformance tests.
+**Phase 3 — Generic QC.** Add `test_plans`, `test_case_versions`, `test_runs`, `test_results`, defect metadata and traceability. Map legacy ULO/UAT via views/read adapters; do not copy or overwrite historical results. Add UI, metric source definitions and conformance tests.
 
 **Phase 4 — Policy engine & release control.** Gate policies, evaluations, waiver, release, approvals and report snapshots with SoD. Add async adapters only if needed and enabled.
 
 **Phase 5 — Integrations.** R2 private migration with dual-read and verified hash/count, SSO/PSrE/CI/webhooks. Enable after contracts, data protection review and acceptance tests.
 
 ### 12.1 Contractual data migration checklist
-\`\`\`text
+```text
 [ ] Pre-migration backup & restore test
 [ ] Snapshot legacy counts: projects/apps/templates/sessions/items/PDFs/evidence/approvals
 [ ] Record hash totals and representative case histories
@@ -497,7 +497,7 @@ Security test cases: IDOR across all 25+ route families, project-scoped file dow
 [ ] Flip write path only with event/audit parity, rollback flag
 [ ] Publish migration result + anomalies + approval
 [ ] Never truncate, reset, or reclassify historical FINAL/SIGNED silently
-\`\`\`
+```
 
 ## 13. End-to-end acceptance scenarios and traceability
 
@@ -541,15 +541,15 @@ A story is **DONE** only if:
 
 ## 16. Source of truth and current-state evidence
 
-- \`README.md\`: MVP/staging warnings; Express legacy; Cloudflare Hono deployment.
-- \`admin-ui/README-cloudflare.md\`: Hyperdrive/Browser bindings, auto-deploy/rollback, interim bytea, R2 unavailability at prior audit.
-- \`admin-ui/package.json\`: React/Vite/Hono pinned major versions.
-- \`admin-ui/worker/index.ts\`: SPA route handling and MIME headers.
-- \`admin-ui/functions/api/[[path]].js\`: session/cookie/DB/legacy API.
-- \`admin-ui/functions/api/workflow-core.js\`: canonical UAT plan, fail/waive/retest guard, session revision.
-- \`admin-ui/functions/api/workflow-routes.js\`: workflow modules.
-- \`db/schema.sql\`, \`db/migrations/20261121_*.sql\`: current DB model and audit/retention changes.
-- \`api-docs/openapi.yaml\`: current API; must not be mistaken for target v2 API.
+- `README.md`: MVP/staging warnings; Express legacy; Cloudflare Hono deployment.
+- `admin-ui/README-cloudflare.md`: Hyperdrive/Browser bindings, auto-deploy/rollback, interim bytea, R2 unavailability at prior audit.
+- `admin-ui/package.json`: React/Vite/Hono pinned major versions.
+- `admin-ui/worker/index.ts`: SPA route handling and MIME headers.
+- `admin-ui/functions/api/[[path]].js`: session/cookie/DB/legacy API.
+- `admin-ui/functions/api/workflow-core.js`: canonical UAT plan, fail/waive/retest guard, session revision.
+- `admin-ui/functions/api/workflow-routes.js`: workflow modules.
+- `db/schema.sql`, `db/migrations/20261121_*.sql`: current DB model and audit/retention changes.
+- `api-docs/openapi.yaml`: current API; must not be mistaken for target v2 API.
 - [Master audit issue #4](https://github.com/saibapna/qamanager/issues/4): verification evidence and blockers, **not** automatic signoff of this redesign.
 
 **Document control:** changes to this specification require new version, linked ADR, impact assessment and PR review. Implementers must preserve old report/decision versions and link test outcomes to the precise spec version.
