@@ -12,6 +12,8 @@ type Person={id:number;kind:'PENGUJI'|'SAKSI';nama:string;jabatan:string|null;em
 type Item={no:string;kategori:string;kebutuhan:string;urutan:number;gate_required:boolean};
 type Audit={id:number;action:string;entity_type:string;entity_id:number;actor_id:number;occurred_at:string;metadata:unknown};
 type Dashboard={sessions:{total:number;drafts:number;finals:number;signed:number};items:{total:number;pass:number;fail:number;belum:number};defects:{total:number;unresolved:number}};
+type StorageCount={objects:number;total_bytes:number;limit_bytes:number};
+type StorageUsage={evidence:StorageCount;fixtures:StorageCount;pdf:StorageCount;note:string};
 const input='w-full rounded border px-3 py-2 text-sm';
 const btn='rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-50';
 const roleOptions:Role[]=['ADMIN','TESTER','WITNESS','APPROVER','AUDITOR'];
@@ -28,6 +30,7 @@ export function ProjectOpsPage(){
   const [planJson,setPlanJson]=useState('');
   const [offset,setOffset]=useState(0);
   const {data:dashboard}=useQuery({queryKey:['project-dashboard',pid],queryFn:()=>api.get<Dashboard>('/projects/'+pid+'/dashboard').then(r=>r.data)});
+  const {data:storage, isError:storageError}=useQuery({queryKey:['storage-usage',pid],queryFn:()=>api.get<StorageUsage>('/projects/'+pid+'/storage-usage').then(r=>r.data),enabled:reader&&section==='dashboard',refetchInterval:60000});
   const {data:members=[]}=useQuery({queryKey:['members',pid],queryFn:()=>api.get<Member[]>('/projects/'+pid+'/members').then(r=>r.data),enabled:reader});
   const {data:people=[]}=useQuery({queryKey:['people',pid],queryFn:()=>api.get<Person[]>('/projects/'+pid+'/people').then(r=>r.data)});
   const {data:plan=[]}=useQuery({queryKey:['plan',pid],queryFn:()=>api.get<Item[]>('/projects/'+pid+'/plan').then(r=>r.data)});
@@ -80,6 +83,26 @@ export function ProjectOpsPage(){
         ['Signed',dashboard?.sessions.signed||0],['PASS',dashboard?.items.pass||0],['FAIL',dashboard?.items.fail||0],
         ['BELUM',dashboard?.items.belum||0],['Defect',dashboard?.defects.total||0],['Defect Belum Selesai',dashboard?.defects.unresolved||0]
       ].map(([label,value])=><div className="rounded-xl bg-white border p-5" key={String(label)}><p className="text-sm text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div>)}
+    </section>}
+    {section==='dashboard'&&reader&&<section aria-label="Kapasitas penyimpanan project" className="mt-5 space-y-3">
+      <h2 className="font-semibold">Kapasitas penyimpanan (PostgreSQL)</h2>
+      {storageError&&<p role="alert" className="text-sm text-red-700">Penggunaan penyimpanan tidak tersedia. Ulangi setelah koneksi pulih.</p>}
+      {storage&&<div className="grid gap-3 md:grid-cols-3">
+        {([['Evidence',storage.evidence],['Fixture baseline',storage.fixtures],['PDF versi',storage.pdf]] as [string,StorageCount][]).map(([label,item])=>{
+          const used=Number(item.total_bytes);
+          const limit=Number(item.limit_bytes);
+          const ratio=limit>0?Math.min(100,Math.max(0,used/limit*100)):0;
+          return <article key={label} className="rounded-xl border bg-white p-4">
+            <h3 className="font-semibold text-sm">{label}</h3>
+            <p className="text-sm mt-2">{(used/1048576).toFixed(1)} / {(limit/1048576).toFixed(0)} MiB</p>
+            <div role="progressbar" aria-label={'Kapasitas '+label} aria-valuenow={Math.round(ratio)} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-2 w-full overflow-hidden rounded bg-slate-200">
+              <div className="h-full bg-blue-700" style={{width:ratio+'%'}} />
+            </div>
+            <p className="mt-2 text-xs text-slate-600">{item.objects} berkas tersimpan</p>
+          </article>;
+        })}
+      </div>}
+      <p className="text-xs text-slate-600">Bukti yang sudah dihapus secara logis tetap menggunakan ruang database. Batas ini bukan backup; storage R2 dan restore drill masih diperlukan.</p>
     </section>}
     {section==='members'&&reader&&<section className="rounded-xl bg-white border p-5 space-y-5">
       <h2 className="font-semibold">Keanggotaan & RBAC</h2>
