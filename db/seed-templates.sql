@@ -250,3 +250,285 @@ SELECT id,'1.0.0','SIMPEG Form ULO','<!DOCTYPE html>
 </html>
 ','{"header":"<table class=\"header-table\">\n  <tr>\n    <td class=\"header-left\">{{project.instansi}}</td>\n    <td class=\"header-right\">{{project.kode_form_1}}</td>\n  </tr>\n  <tr>\n    <td class=\"header-left\">{{project.bidang}}</td>\n    <td class=\"header-right\">{{project.kode_form_2}}</td>\n  </tr>\n  <tr>\n    <td class=\"header-left\">{{project.form_title}}</td>\n    <td class=\"header-right\">{{project.kode_form_3}}</td>\n  </tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'5afc04c2c3e68df454155f611d356aaef384f1c10b33a8f182c732349ea0b785',TRUE
 FROM projects WHERE kode='SIMPEG' ON CONFLICT (project_id,versi) DO NOTHING;
+INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)
+SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>{{aplikasi.nama_singkat}} - Form BA Hasil Pengujian</title>
+<style>
+  @page { size: A4 portrait; margin: 13mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; line-height: 1.18; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { break-after: page; page-break-after: always; }
+  .page:last-child { break-after: auto; page-break-after: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .header-table { margin-bottom: 11mm; }
+  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; }
+  .header-left { width: 80%; font-weight: 700; }
+  .header-left.header-title { font-weight: 400; font-size: 10pt; }
+  .header-right { width: 20%; font-weight: 700; }
+  .page-results .header-table { margin-bottom: 7mm; }
+  .identity-table td { border: .55pt solid #222; padding: 1.55mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
+  .identity-table .section-label { font-weight: 700; background: #dedede; padding: 1.1mm 1.5mm; }
+  .identity-table .field-label { white-space: nowrap; }
+  .identity-table .approval-text { line-height: 1.3; }
+  .signature-table { margin-top: -0.55pt; }
+  .signature-table td { border: .55pt solid #222; width: 50%; vertical-align: top; padding: 2.3mm 2mm; text-align: center; }
+  .signature-table .signature-space { height: 18mm; }
+  .signature-table .signature-name { font-weight: 500; }
+  .signature-table .signature-meta { font-size: 8pt; }
+  .signature-table .signature-warning { color: #6b7280; font-size: 7pt; padding-top: 1mm; }
+  .summary-block { font-size: 8.1pt; line-height: 1.3; margin: 5mm 1mm 0; }
+  .summary-block strong { font-weight: 600; }
+  .result-table { font-size: 8.25pt; }
+  .result-table th, .result-table td { border: .55pt solid #222; padding: 1.25mm 1.35mm; vertical-align: top; overflow-wrap: anywhere; line-height: 1.23; }
+  .result-table th { text-align: center; font-weight: 700; background: #f7f7f7; }
+  .result-table th.col-no { width: 7%; }
+  .result-table th.col-test { width: 46%; }
+  .result-table th.col-result { width: 47%; }
+  .section-row td { background: #e8f0f5; font-weight: 700; padding-top: 1.6mm; padding-bottom: 1.6mm; }
+  .status-mark { display: inline-block; font-weight: 700; min-width: 3.5mm; margin-right: .6mm; }
+  .status-pass { color: #008943; }
+  .status-fail { color: #c62828; }
+  .status-pending { color: #6b7280; }
+  .page-results .summary-block { margin: 5mm 0 2mm; }
+  .signature-table.signature-final { margin-top: 2mm; }
+  .signature-table.signature-final td { padding-top: 1.7mm; }
+  .signature-table.signature-final .signature-space { height: 13mm; }
+  .page-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: 7.5pt; margin-top: 9mm; color: #333; }
+  .page-footer .rule { width: 100%; border-top: .5pt solid #8ba9c6; padding-top: 2mm; text-align: right; }
+  .page-results .page-footer { margin-top: 8mm; }
+  @media screen { body { background: #f3f4f6; } .page { width: 178mm; min-height: 270mm; margin: 12mm auto; padding: 0; background: #fff; box-shadow: 0 1px 8px #ddd; } }
+</style>
+</head>
+<body>
+
+<div class="page page-1">
+  {{> header}}
+  <table class="identity-table">
+    <colgroup>
+      <col style="width:15%"><col style="width:18%"><col style="width:15%">
+      <col style="width:18%"><col style="width:13%"><col style="width:21%">
+    </colgroup>
+    <tr><td colspan="6" class="section-label">SKPD</td></tr>
+    <tr><td class="field-label">Nama SKPD</td><td colspan="3">{{skpd.nama}}</td><td class="field-label">Kota/Kab/Prov</td><td>{{skpd.kota}}</td></tr>
+    <tr><td colspan="6" class="section-label">APLIKASI</td></tr>
+    <tr><td class="field-label">Nama Singkat</td><td colspan="5">{{aplikasi.nama_singkat}}</td></tr>
+    <tr><td class="field-label">Nama Panjang</td><td colspan="5">{{aplikasi.nama_panjang}}</td></tr>
+    <tr><td class="field-label">Alamat URL</td><td colspan="5">{{aplikasi.url}}</td></tr>
+    <tr><td colspan="6" class="section-label">Tanggal/Waktu</td></tr>
+    <tr><td colspan="6">Dengan ini menyatakan bahwa pada :</td></tr>
+    <tr><td class="field-label">Hari</td><td>{{sesi.hari}}</td><td class="field-label">Tanggal</td><td>{{sesi.tanggal}}</td><td class="field-label">Pukul</td><td>{{sesi.pukul}}</td></tr>
+    <tr><td class="field-label">Bertempat di</td><td colspan="5">{{sesi.tempat}}</td></tr>
+    <tr><td class="field-label">Telah dilakukan</td><td colspan="5">{{sesi.jenis}}</td></tr>
+    <tr><td colspan="6">Oleh :</td></tr>
+    <tr><td colspan="6" class="section-label">Penguji</td></tr>
+    <tr><td class="field-label">Nama Penguji</td><td colspan="2">{{penguji.nama}}</td><td class="field-label">Jabatan</td><td colspan="2">{{penguji.jabatan}}</td></tr>
+    <tr><td class="field-label">Surel (Email)</td><td colspan="2">{{penguji.email}}</td><td class="field-label">Telp.</td><td colspan="2">{{penguji.telp}}</td></tr>
+    <tr><td colspan="6" class="section-label">Saksi</td></tr>
+    <tr><td class="field-label">Nama Saksi</td><td colspan="2">{{saksi.nama}}</td><td class="field-label">Jabatan</td><td colspan="2">{{saksi.jabatan}}</td></tr>
+    <tr><td class="field-label">Surel (Email)</td><td colspan="2">{{saksi.email}}</td><td class="field-label">Telp.</td><td colspan="2">{{saksi.telp}}</td></tr>
+    <tr><td colspan="6" class="section-label">Persetujuan</td></tr>
+    <tr><td colspan="6" class="approval-text">Dengan ini saya menyatakan bahwa saya bertindak atas nama institusi yang saya wakili dan data hasil pengujian yang terlampir pada bagian lain di dokumen ini telah saya isi dengan benar.</td></tr>
+  </table>
+  <table class="signature-table" aria-label="Ruang persetujuan dan tanda tangan">
+    <tr>
+      <td>Disaksikan oleh :
+        <div class="signature-space"></div>
+        <div class="signature-name">{{saksi.nama}}</div>
+        <div class="signature-meta">{{#if saksi.nip}}NIP. {{saksi.nip}}{{/if}}</div>
+      </td>
+      <td>{{sesi.tanggal}}<div>Diuji oleh :</div>
+        <div class="signature-space"></div>
+        <div class="signature-name">{{penguji.nama}}</div>
+        <div class="signature-meta">{{#if penguji.nip}}NIP. {{penguji.nip}}{{/if}}</div>
+      </td>
+    </tr>
+  </table>
+  <div class="summary-block">
+    <strong>Ringkasan Hasil {{dokumen.jenis}} :</strong>
+    <div>{{ringkasan.total}} item diuji - {{ringkasan.lulus}} lulus, {{ringkasan.gagal}} gagal, {{ringkasan.belum}} belum diuji. {{ringkasan.catatan}}</div>
+    {{#if dokumen.signatureNotice}}<div class="signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
+  </div>
+  <div class="page-footer"><div class="rule">Hal. 1 dari {{dokumen.totalPages}} halaman</div></div>
+</div>
+
+{{#each pages}}
+<div class="page page-results page-{{this.pageNumber}}">
+  {{> header}}
+  <table class="result-table">
+    <thead><tr><th class="col-no">No</th><th class="col-test">Kebutuhan/Pengujian</th><th class="col-result">Hasil/Catatan</th></tr></thead>
+    <tbody>
+      {{#each this.rows}}
+        {{#if this.isSection}}
+          <tr class="section-row"><td>{{this.code}}</td><td>{{this.text}}</td><td></td></tr>
+        {{else}}
+          <tr>
+            <td>{{this.no}}</td>
+            <td>{{this.kebutuhan}}</td>
+            <td>{{#if this.isPass}}<span class="status-mark status-pass" aria-label="PASS">&#10003;</span>{{else}}{{#if this.isFail}}<span class="status-mark status-fail" aria-label="FAIL">&#10005;</span>{{else}}<span class="status-mark status-pending" aria-label="BELUM">-</span>{{/if}}{{/if}}{{this.hasil}}</td>
+          </tr>
+        {{/if}}
+      {{/each}}
+    </tbody>
+  </table>
+  {{#if this.isLastPage}}
+    <div class="summary-block"><strong>Ringkasan Hasil {{@root.dokumen.jenis}} :</strong><div>{{@root.ringkasan.total}} item - {{@root.ringkasan.lulus}} lulus, {{@root.ringkasan.gagal}} gagal, {{@root.ringkasan.belum}} belum diuji. {{@root.ringkasan.catatan}} {{@root.ringkasan.temuan}}</div></div>
+    <table class="signature-table signature-final" aria-label="Ruang pengesahan hasil">
+      <tr>
+        <td>Disaksikan oleh :<div class="signature-space"></div><div class="signature-name">{{@root.saksi.nama}}</div><div class="signature-meta">{{#if @root.saksi.nip}}NIP. {{@root.saksi.nip}}{{/if}}</div></td>
+        <td>{{@root.sesi.tanggal}}<div>Diuji oleh :</div><div class="signature-space"></div><div class="signature-name">{{@root.penguji.nama}}</div><div class="signature-meta">{{#if @root.penguji.nip}}NIP. {{@root.penguji.nip}}{{/if}}</div></td>
+      </tr>
+    </table>
+  {{/if}}
+  <div class="page-footer"><span>{{@root.sesi.tanggal}}</span><span>Hal. {{this.pageNumber}} dari {{@root.dokumen.totalPages}} halaman</span></div>
+</div>
+{{/each}}
+
+</body>
+</html>
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AKSES & DASHBOARD","B":"PARAMETER - DAFTAR OPD","C":"PARAMETER - KECAMATAN","D":"PARAMETER - GAMPONG","E":"PARAMETER - URUSAN","F":"INOVASI DAERAH - DAFTAR & INDIKATOR","G":"INOVASI DAERAH - TAMBAH","H":"KELITBANGAN & LAPORAN","I":"UTILITY - PENGGUNA & GROUP","J":"UTILITY - OTORITAS & PENGATURAN","K":"NAVIGASI & LAINNYA","L":"GATE ULO YANG BELUM TERBUKTI"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":20},"3":{"fromOrder":21,"toOrder":42},"4":{"fromOrder":43,"toOrder":60},"5":{"fromOrder":61,"toOrder":71}}'::jsonb,'52aeac5b34f83d0a4a2e3ae2285e279ac22e6ff917f550d92f91121f9cb6976f',TRUE
+FROM projects WHERE kode='SIRIKAP' ON CONFLICT (project_id,versi) DO NOTHING;
+INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)
+SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>{{aplikasi.nama_singkat}} - Form BA Hasil Pengujian</title>
+<style>
+  @page { size: A4 portrait; margin: 13mm 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; line-height: 1.18; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { break-after: page; page-break-after: always; }
+  .page:last-child { break-after: auto; page-break-after: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .header-table { margin-bottom: 11mm; }
+  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; }
+  .header-left { width: 80%; font-weight: 700; }
+  .header-left.header-title { font-weight: 400; font-size: 10pt; }
+  .header-right { width: 20%; font-weight: 700; }
+  .page-results .header-table { margin-bottom: 7mm; }
+  .identity-table td { border: .55pt solid #222; padding: 1.55mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
+  .identity-table .section-label { font-weight: 700; background: #dedede; padding: 1.1mm 1.5mm; }
+  .identity-table .field-label { white-space: nowrap; }
+  .identity-table .approval-text { line-height: 1.3; }
+  .signature-table { margin-top: -0.55pt; }
+  .signature-table td { border: .55pt solid #222; width: 50%; vertical-align: top; padding: 2.3mm 2mm; text-align: center; }
+  .signature-table .signature-space { height: 18mm; }
+  .signature-table .signature-name { font-weight: 500; }
+  .signature-table .signature-meta { font-size: 8pt; }
+  .signature-table .signature-warning { color: #6b7280; font-size: 7pt; padding-top: 1mm; }
+  .summary-block { font-size: 8.1pt; line-height: 1.3; margin: 5mm 1mm 0; }
+  .summary-block strong { font-weight: 600; }
+  .result-table { font-size: 8.25pt; }
+  .result-table th, .result-table td { border: .55pt solid #222; padding: 1.25mm 1.35mm; vertical-align: top; overflow-wrap: anywhere; line-height: 1.23; }
+  .result-table th { text-align: center; font-weight: 700; background: #f7f7f7; }
+  .result-table th.col-no { width: 7%; }
+  .result-table th.col-test { width: 46%; }
+  .result-table th.col-result { width: 47%; }
+  .section-row td { background: #e8f0f5; font-weight: 700; padding-top: 1.6mm; padding-bottom: 1.6mm; }
+  .status-mark { display: inline-block; font-weight: 700; min-width: 3.5mm; margin-right: .6mm; }
+  .status-pass { color: #008943; }
+  .status-fail { color: #c62828; }
+  .status-pending { color: #6b7280; }
+  .page-results .summary-block { margin: 5mm 0 2mm; }
+  .signature-table.signature-final { margin-top: 2mm; }
+  .signature-table.signature-final td { padding-top: 1.7mm; }
+  .signature-table.signature-final .signature-space { height: 13mm; }
+  .page-footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: 7.5pt; margin-top: 9mm; color: #333; }
+  .page-footer .rule { width: 100%; border-top: .5pt solid #8ba9c6; padding-top: 2mm; text-align: right; }
+  .page-results .page-footer { margin-top: 8mm; }
+  @media screen { body { background: #f3f4f6; } .page { width: 178mm; min-height: 270mm; margin: 12mm auto; padding: 0; background: #fff; box-shadow: 0 1px 8px #ddd; } }
+</style>
+</head>
+<body>
+
+<div class="page page-1">
+  {{> header}}
+  <table class="identity-table">
+    <colgroup>
+      <col style="width:15%"><col style="width:18%"><col style="width:15%">
+      <col style="width:18%"><col style="width:13%"><col style="width:21%">
+    </colgroup>
+    <tr><td colspan="6" class="section-label">SKPD</td></tr>
+    <tr><td class="field-label">Nama SKPD</td><td colspan="3">{{skpd.nama}}</td><td class="field-label">Kota/Kab/Prov</td><td>{{skpd.kota}}</td></tr>
+    <tr><td colspan="6" class="section-label">APLIKASI</td></tr>
+    <tr><td class="field-label">Nama Singkat</td><td colspan="5">{{aplikasi.nama_singkat}}</td></tr>
+    <tr><td class="field-label">Nama Panjang</td><td colspan="5">{{aplikasi.nama_panjang}}</td></tr>
+    <tr><td class="field-label">Alamat URL</td><td colspan="5">{{aplikasi.url}}</td></tr>
+    <tr><td colspan="6" class="section-label">Tanggal/Waktu</td></tr>
+    <tr><td colspan="6">Dengan ini menyatakan bahwa pada :</td></tr>
+    <tr><td class="field-label">Hari</td><td>{{sesi.hari}}</td><td class="field-label">Tanggal</td><td>{{sesi.tanggal}}</td><td class="field-label">Pukul</td><td>{{sesi.pukul}}</td></tr>
+    <tr><td class="field-label">Bertempat di</td><td colspan="5">{{sesi.tempat}}</td></tr>
+    <tr><td class="field-label">Telah dilakukan</td><td colspan="5">{{sesi.jenis}}</td></tr>
+    <tr><td colspan="6">Oleh :</td></tr>
+    <tr><td colspan="6" class="section-label">Penguji</td></tr>
+    <tr><td class="field-label">Nama Penguji</td><td colspan="2">{{penguji.nama}}</td><td class="field-label">Jabatan</td><td colspan="2">{{penguji.jabatan}}</td></tr>
+    <tr><td class="field-label">Surel (Email)</td><td colspan="2">{{penguji.email}}</td><td class="field-label">Telp.</td><td colspan="2">{{penguji.telp}}</td></tr>
+    <tr><td colspan="6" class="section-label">Saksi</td></tr>
+    <tr><td class="field-label">Nama Saksi</td><td colspan="2">{{saksi.nama}}</td><td class="field-label">Jabatan</td><td colspan="2">{{saksi.jabatan}}</td></tr>
+    <tr><td class="field-label">Surel (Email)</td><td colspan="2">{{saksi.email}}</td><td class="field-label">Telp.</td><td colspan="2">{{saksi.telp}}</td></tr>
+    <tr><td colspan="6" class="section-label">Persetujuan</td></tr>
+    <tr><td colspan="6" class="approval-text">Dengan ini saya menyatakan bahwa saya bertindak atas nama institusi yang saya wakili dan data hasil pengujian yang terlampir pada bagian lain di dokumen ini telah saya isi dengan benar.</td></tr>
+  </table>
+  <table class="signature-table" aria-label="Ruang persetujuan dan tanda tangan">
+    <tr>
+      <td>Disaksikan oleh :
+        <div class="signature-space"></div>
+        <div class="signature-name">{{saksi.nama}}</div>
+        <div class="signature-meta">{{#if saksi.nip}}NIP. {{saksi.nip}}{{/if}}</div>
+      </td>
+      <td>{{sesi.tanggal}}<div>Diuji oleh :</div>
+        <div class="signature-space"></div>
+        <div class="signature-name">{{penguji.nama}}</div>
+        <div class="signature-meta">{{#if penguji.nip}}NIP. {{penguji.nip}}{{/if}}</div>
+      </td>
+    </tr>
+  </table>
+  <div class="summary-block">
+    <strong>Ringkasan Hasil {{dokumen.jenis}} :</strong>
+    <div>{{ringkasan.total}} item diuji - {{ringkasan.lulus}} lulus, {{ringkasan.gagal}} gagal, {{ringkasan.belum}} belum diuji. {{ringkasan.catatan}}</div>
+    {{#if dokumen.signatureNotice}}<div class="signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
+  </div>
+  <div class="page-footer"><div class="rule">Hal. 1 dari {{dokumen.totalPages}} halaman</div></div>
+</div>
+
+{{#each pages}}
+<div class="page page-results page-{{this.pageNumber}}">
+  {{> header}}
+  <table class="result-table">
+    <thead><tr><th class="col-no">No</th><th class="col-test">Kebutuhan/Pengujian</th><th class="col-result">Hasil/Catatan</th></tr></thead>
+    <tbody>
+      {{#each this.rows}}
+        {{#if this.isSection}}
+          <tr class="section-row"><td>{{this.code}}</td><td>{{this.text}}</td><td></td></tr>
+        {{else}}
+          <tr>
+            <td>{{this.no}}</td>
+            <td>{{this.kebutuhan}}</td>
+            <td>{{#if this.isPass}}<span class="status-mark status-pass" aria-label="PASS">&#10003;</span>{{else}}{{#if this.isFail}}<span class="status-mark status-fail" aria-label="FAIL">&#10005;</span>{{else}}<span class="status-mark status-pending" aria-label="BELUM">-</span>{{/if}}{{/if}}{{this.hasil}}</td>
+          </tr>
+        {{/if}}
+      {{/each}}
+    </tbody>
+  </table>
+  {{#if this.isLastPage}}
+    <div class="summary-block"><strong>Ringkasan Hasil {{@root.dokumen.jenis}} :</strong><div>{{@root.ringkasan.total}} item - {{@root.ringkasan.lulus}} lulus, {{@root.ringkasan.gagal}} gagal, {{@root.ringkasan.belum}} belum diuji. {{@root.ringkasan.catatan}} {{@root.ringkasan.temuan}}</div></div>
+    <table class="signature-table signature-final" aria-label="Ruang pengesahan hasil">
+      <tr>
+        <td>Disaksikan oleh :<div class="signature-space"></div><div class="signature-name">{{@root.saksi.nama}}</div><div class="signature-meta">{{#if @root.saksi.nip}}NIP. {{@root.saksi.nip}}{{/if}}</div></td>
+        <td>{{@root.sesi.tanggal}}<div>Diuji oleh :</div><div class="signature-space"></div><div class="signature-name">{{@root.penguji.nama}}</div><div class="signature-meta">{{#if @root.penguji.nip}}NIP. {{@root.penguji.nip}}{{/if}}</div></td>
+      </tr>
+    </table>
+  {{/if}}
+  <div class="page-footer"><span>{{@root.sesi.tanggal}}</span><span>Hal. {{this.pageNumber}} dari {{@root.dokumen.totalPages}} halaman</span></div>
+</div>
+{{/each}}
+
+</body>
+</html>
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'52aeac5b34f83d0a4a2e3ae2285e279ac22e6ff917f550d92f91121f9cb6976f',TRUE
+FROM projects WHERE kode='SIMPEG' ON CONFLICT (project_id,versi) DO NOTHING;
