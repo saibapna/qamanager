@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
 import { runAtomic, isPdfSnapshotCurrent } from './workflow-core.js';
 import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
+import {storeFile,readFile,cleanupUncommitted,storageEnabled} from './private-storage.js';
 
 const MAX_FIXTURE_BYTES = PRIVATE_STORAGE_LIMITS.fixtureFile;
 const MAX_OUTPUT_BYTES = PRIVATE_STORAGE_LIMITS.pdfOutput;
@@ -117,7 +118,9 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     const digest = hashPdf(bytes);
     const path = 'fixtures/template-' + tid + '/' + crypto.randomUUID() + '.pdf';
     const name = String(file.name || 'baseline.pdf').replace(/[^\w .()-]/g, '_').slice(0, 120);
-    const fixture = await runAtomic(sql => q(c, sql), async () => {
+    let createdKey=null;
+    let fixture;
+    try {fixture = await runAtomic(sql => q(c, sql), async () => {
       await q(c, 'SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
       const count = await first(c, 'SELECT count(*)::int AS total FROM template_fixtures WHERE template_id=$1', [tid]);
       if(count.total >= PRIVATE_STORAGE_LIMITS.fixtureTemplateCount) fail(409,'Maksimal 10 fixture per template');
@@ -125,12 +128,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
       if(wouldExceedQuota(usage.total_bytes,bytes.length,PRIVATE_STORAGE_LIMITS.fixtureProjectBytes)){
         fail(413,'Kapasitas fixture project mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.fixtureProjectBytes));
       }
+      createdKey=await storeFile(c.env,projectId,'fixtures',bytes,'application/pdf',digest);
       const inserted = await first(c,
-        'INSERT INTO template_fixtures(template_id,nama,pdf_path,sha256,pdf_data,size_bytes,page_count) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,template_id,nama,pdf_path,sha256,size_bytes,page_count,created_at',
-        [tid, name, path, digest, Buffer.from(bytes), bytes.length, info.pageCount]);
+        'INSERT INTO template_fixtures(template_id,nama,pdf_path,sha256,pdf_data,storage_key,size_bytes,page_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,template_id,nama,pdf_path,sha256,size_bytes,page_count,created_at',
+        [tid, name, path, digest, createdKey?null:Buffer.from(bytes),createdKey,bytes.length, info.pageCount]);
       await audit(c, 'FIXTURE_UPLOADED', 'template_fixture', inserted.id, { template_id: tid, size_bytes: bytes.length, sha256: digest });
       return inserted;
-    });
+    });}catch(error){await cleanupUncommitted(c.env,createdKey);throw error;}
     return c.json(fixture, 201);
   });
 
@@ -139,10 +143,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     const tid = id(c.req.param('templateId'));
     const fid = id(c.req.param('fixtureId'));
     const data = await first(c,
-      'SELECT pdf_data FROM template_fixtures WHERE template_id=$1 AND id=$2',
+      'SELECT pdf_data,storage_key,sha256,size_bytes FROM template_fixtures WHERE template_id=$1 AND id=$2',
       [tid, fid]);
-    const bytes = normalizePdfData(data?.pdf_data);
-    if (!bytes) fail(404, 'Fixture tidak ditemukan');
+    if(!data)fail(404,'Fixture tidak ditemukan');
+    const bytes = data.storage_key
+      ? await readFile(c.env,data.storage_key,data.sha256,data.size_bytes).catch(()=>fail(503,'Storage atau verifikasi checksum gagal'))
+      : normalizePdfData(data.pdf_data);
+    if(!bytes)fail(404,'Fixture tidak ditemukan');
     return safePdfResponse(bytes, 'fixture-template-' + tid + '-' + fid + '.pdf');
   });
 
@@ -188,6 +195,7 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     // Advisory lock serializes version allocation; the browser call is made outside this transaction.
     await q(c, 'BEGIN');
     let saved;
+    let createdKey=null;
     try {
       // Serialize all project PDF writes to enforce a physical-bytea ceiling.
       await q(c, 'SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
@@ -207,13 +215,15 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
       const version = Number(latest.next_version);
       if (version > MAX_OUTPUTS_PER_SESSION) fail(409, 'Batas versi PDF sesi tercapai');
       const path = 'output/project-' + projectId + '/sesi-' + sid + '-v' + version + '.pdf';
+      createdKey=await storeFile(c.env,projectId,'output',data,'application/pdf',digest);
       saved = await first(c,
-        'INSERT INTO ulo_output(sesi_id,versi,pdf_path,sha256,size_bytes,page_count,pdf_data) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,versi,pdf_path,sha256,size_bytes,page_count',
-        [sid, version, path, digest, data.length, info.pageCount, Buffer.from(data)]);
+        'INSERT INTO ulo_output(sesi_id,versi,pdf_path,sha256,size_bytes,page_count,pdf_data,storage_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,versi,pdf_path,sha256,size_bytes,page_count',
+        [sid, version, path, digest, data.length, info.pageCount, createdKey?null:Buffer.from(data),createdKey]);
       await audit(c, 'PDF_GENERATED', 'sesi', sid, { output_id: saved.id, versi: version, source_revision: sourceRevision, source_status: sourceStatus, source_html_sha256: sourceHtmlSha256, render_ms: renderMs, page_count: info.pageCount, size_bytes: data.length });
       await q(c, 'COMMIT');
     } catch (error) {
       await q(c, 'ROLLBACK');
+      await cleanupUncommitted(c.env,createdKey);
       throw error;
     }
     console.info('qamanager_pdf_metrics',JSON.stringify({project_id:projectId,sesi_id:sid,source_revision:sourceRevision,render_ms:renderMs,total_ms:Date.now()-startedAt,page_count:info.pageCount,size_bytes:data.length}));
@@ -224,9 +234,12 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     await guard(c, 'sesiId');
     const sid = id(c.req.param('sesiId'));
     const oid = id(c.req.param('outputId'));
-    const file = await first(c, 'SELECT pdf_data,versi FROM ulo_output WHERE id=$1 AND sesi_id=$2', [oid, sid]);
-    const bytes = normalizePdfData(file?.pdf_data);
-    if (!bytes) fail(404, 'PDF keluaran tidak ditemukan');
+    const file = await first(c, 'SELECT pdf_data,storage_key,sha256,size_bytes,versi FROM ulo_output WHERE id=$1 AND sesi_id=$2', [oid, sid]);
+    if(!file)fail(404,'PDF keluaran tidak ditemukan');
+    const bytes=file.storage_key
+      ? await readFile(c.env,file.storage_key,file.sha256,file.size_bytes).catch(()=>fail(503,'Storage atau verifikasi checksum gagal'))
+      : normalizePdfData(file.pdf_data);
+    if(!bytes)fail(404,'PDF keluaran tidak ditemukan');
     return safePdfResponse(bytes, 'ulo-sesi-' + sid + '-v' + file.versi + '.pdf');
   });
 
@@ -237,16 +250,20 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     const requested = String(input?.outputPath || input?.output || '').trim();
     if (!requested || requested.length > 500) fail(400, 'Path PDF keluaran wajib');
     const output = await first(c,
-      'SELECT o.id,o.sha256,o.pdf_data,o.page_count,o.pdf_path FROM ulo_output o JOIN ulo_sesi s ON s.id=o.sesi_id WHERE o.pdf_path=$1 AND s.template_id=$2 AND s.project_id=$3',
+      'SELECT o.id,o.sha256,o.pdf_data,o.storage_key,o.size_bytes,o.page_count,o.pdf_path FROM ulo_output o JOIN ulo_sesi s ON s.id=o.sesi_id WHERE o.pdf_path=$1 AND s.template_id=$2 AND s.project_id=$3',
       [requested, tid, projectId]);
-    if (!output?.pdf_data) fail(404, 'Output PDF untuk template ini tidak ditemukan');
+    if (!output || (!output.pdf_data && !output.storage_key)) fail(404, 'Output PDF untuk template ini tidak ditemukan');
     const fixture = await first(c,
-      'SELECT id,sha256,pdf_data,page_count FROM template_fixtures WHERE template_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1',
+      'SELECT id,sha256,pdf_data,storage_key,size_bytes,page_count FROM template_fixtures WHERE template_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1',
       [tid]);
-    if (!fixture?.pdf_data) fail(404, 'Upload fixture PDF baseline terlebih dahulu');
+    if (!fixture || (!fixture.pdf_data && !fixture.storage_key)) fail(404, 'Upload fixture PDF baseline terlebih dahulu');
     const identical = output.sha256 === fixture.sha256;
-    const outPages = Number(output.page_count) || (await pdfInfo(normalizePdfData(output.pdf_data), fail)).pageCount;
-    const refPages = Number(fixture.page_count) || (await pdfInfo(normalizePdfData(fixture.pdf_data), fail)).pageCount;
+    const outPages = Number(output.page_count) || (await pdfInfo(output.storage_key
+      ? await readFile(c.env,output.storage_key,output.sha256,output.size_bytes)
+      : normalizePdfData(output.pdf_data),fail)).pageCount;
+    const refPages = Number(fixture.page_count) || (await pdfInfo(fixture.storage_key
+      ? await readFile(c.env,fixture.storage_key,fixture.sha256,fixture.size_bytes)
+      : normalizePdfData(fixture.pdf_data),fail)).pageCount;
     const bothPages = Math.max(outPages, refPages);
     if (kind === 'validate') {
       return c.json({
