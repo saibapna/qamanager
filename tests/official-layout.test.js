@@ -18,6 +18,10 @@ for(const [file,expected,kind] of [
     const $=cheerio.load(Handlebars.compile(layout)(data));
     assert.equal($('.page').length,expected);
     assert.equal($('.header-table').length,expected);
+    $('.header-table').each((_,table)=>{
+      const codes=$(table).text();
+      for(const n of ['3','4','5'])assert.match(codes,new RegExp('S-APP\\.2\\.OBJ\\.'+n));
+    });
     assert.equal($('.result-table').length,expected-1);
     assert.equal($('.signature-table').length,2);
     if(expected===5) assert.match($('.page-1 .summary-block').text(),new RegExp('Ringkasan Hasil '+kind));
