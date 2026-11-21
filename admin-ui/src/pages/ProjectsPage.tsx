@@ -30,8 +30,11 @@ export function ProjectsPage() {
     pass: acc.pass + row.pass_items,
     fail: acc.fail + row.fail_items,
     remaining: acc.remaining + row.pending_items,
-    defects: acc.defects + row.open_defects
-  }), {sessions:0,pass:0,fail:0,remaining:0,defects:0});
+    defects: acc.defects + row.open_defects,
+    witness: acc.witness + row.awaiting_witness,
+    approver: acc.approver + row.awaiting_approver,
+    rejected: acc.rejected + row.rejected_decisions
+  }), {sessions:0,pass:0,fail:0,remaining:0,defects:0,witness:0,approver:0,rejected:0});
   const progress = new Map(portfolio.map(row => [row.id,row]));
 
 
@@ -57,8 +60,8 @@ export function ProjectsPage() {
       <section aria-label="Ringkasan UAT lintas project" className="mb-5">
         <h2 className="text-sm font-semibold mb-2">Ringkasan semua project yang dapat Anda akses</h2>
         {portfolioError && <p role="alert" className="text-sm text-red-700 mb-2">Gagal memuat ringkasan lintas project. Data tabel project tetap tersedia.</p>}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {([['Sesi UAT',totals.sessions],['PASS',totals.pass],['FAIL',totals.fail],['BELUM',totals.remaining],['Defect aktif',totals.defects]] as const).map(([label,value])=>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {([['Sesi UAT',totals.sessions],['PASS',totals.pass],['FAIL',totals.fail],['BELUM',totals.remaining],['Defect aktif',totals.defects],['Menunggu saksi',totals.witness],['Menunggu approver',totals.approver],['Riwayat penolakan',totals.rejected]] as const).map(([label,value])=>
             <div key={label} className="rounded-xl border bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-2xl">{value}</p></div>)}
         </div>
       </section>
@@ -78,7 +81,7 @@ export function ProjectsPage() {
             {isLoading ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>
             ) : projects.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Belum ada project</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Belum ada project</td></tr>
             ) : projects.map(p => (
               <tr key={p.id} className="border-b hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-xs">{p.kode}</td>
@@ -91,6 +94,7 @@ export function ProjectsPage() {
                   {progress.has(p.id) ? <span>
                     {progress.get(p.id)?.pass_items}/{progress.get(p.id)?.total_items} PASS
                     <span className="block">{progress.get(p.id)?.open_defects} defect aktif</span>
+                    <span className="block">{progress.get(p.id)?.awaiting_witness} menunggu saksi · {progress.get(p.id)?.awaiting_approver} menunggu approver</span>
                   </span> : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">
