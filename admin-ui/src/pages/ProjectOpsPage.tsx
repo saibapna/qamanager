@@ -11,7 +11,7 @@ type Member={id:number;email:string;nama:string;role:Role;aktif:boolean};
 type Person={id:number;kind:'PENGUJI'|'SAKSI';nama:string;jabatan:string|null;email:string|null;telepon:string|null;nip:string|null;aktif:boolean};
 type Item={no:string;kategori:string;kebutuhan:string;urutan:number;gate_required:boolean};
 type Audit={id:number;action:string;entity_type:string;entity_id:number;actor_id:number;occurred_at:string;metadata:unknown};
-type Dashboard={sessions:{total:number;drafts:number;finals:number;signed:number};items:{total:number;pass:number;fail:number;belum:number};defects:{total:number;unresolved:number}};
+type Dashboard={sessions:{total:number;drafts:number;finals:number;signed:number};items:{total:number;pass:number;fail:number;belum:number};defects:{total:number;unresolved:number};approvals:{awaiting_witness:number;awaiting_approver:number;rejected_decisions:number}};
 type StorageCount={objects:number;total_bytes:number;limit_bytes:number};
 type StorageUsage={evidence:StorageCount;fixtures:StorageCount;pdf:StorageCount;note:string};
 const input='w-full rounded border px-3 py-2 text-sm';
@@ -81,7 +81,8 @@ export function ProjectOpsPage(){
       {[
         ['Total Sesi',dashboard?.sessions.total||0],['Draft',dashboard?.sessions.drafts||0],['Final',dashboard?.sessions.finals||0],
         ['Signed',dashboard?.sessions.signed||0],['PASS',dashboard?.items.pass||0],['FAIL',dashboard?.items.fail||0],
-        ['BELUM',dashboard?.items.belum||0],['Defect',dashboard?.defects.total||0],['Defect Belum Selesai',dashboard?.defects.unresolved||0]
+        ['BELUM',dashboard?.items.belum||0],['Defect',dashboard?.defects.total||0],['Defect Belum Selesai',dashboard?.defects.unresolved||0],
+        ['Menunggu Saksi',dashboard?.approvals?.awaiting_witness||0],['Menunggu Approver',dashboard?.approvals?.awaiting_approver||0],['Persetujuan Ditolak (Riwayat)',dashboard?.approvals?.rejected_decisions||0]
       ].map(([label,value])=><div className="rounded-xl bg-white border p-5" key={String(label)}><p className="text-sm text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div>)}
     </section>}
     {section==='dashboard'&&reader&&<section aria-label="Kapasitas penyimpanan project" className="mt-5 space-y-3">
