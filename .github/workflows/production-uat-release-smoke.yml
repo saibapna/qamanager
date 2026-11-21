@@ -39,6 +39,8 @@ jobs:
           check GET /api/projects/1/dashboard 401
           check GET /api/projects/1/members 401
           check GET /api/sesi/1 401
+          check POST /api/sesi/1/pdf/preview 401
+          check POST /api/sesi/1/pdf 401
           check GET /api/sesi/1/history 401
           check GET /api/sesi/1/defects 401
           check GET /api/sesi/1/approvals 401

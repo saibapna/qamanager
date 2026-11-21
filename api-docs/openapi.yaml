@@ -384,6 +384,43 @@ paths:
       responses:
         '200':
           description: OK
+  /sesi/{sesiId}/pdf/preview:
+    post:
+      summary: Pratinjau PDF sementara sebelum generate/simpan
+      description: >-
+        ADMIN/TESTER yang merupakan anggota project dapat merender PDF
+        dari sesi dan template published yang sama dengan proses Generate.
+        Hasil tidak disimpan ke Storage atau ulo_output dan tidak mengubah
+        versi, status, atau tanda tangan. Hash dan revisi mengikat
+        konfirmasi Generate ke sumber yang telah ditinjau.
+      parameters:
+      - name: sesiId
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: PDF sementara dan metadata snapshot
+          headers:
+            X-Pdf-Preview-Sha256:
+              description: SHA-256 dari HTML sumber, bukan tanda tangan digital
+              schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+            X-Pdf-Preview-Revision:
+              schema: {type: integer, minimum: 1}
+            X-Pdf-Preview-Status:
+              schema: {type: string}
+            X-Pdf-Preview-Pages:
+              schema: {type: integer, minimum: 1}
+            Cache-Control:
+              schema: {type: string, example: 'private, no-store'}
+          content:
+            application/pdf:
+              schema: {type: string, format: binary}
+        '401': {description: Tidak terautentikasi}
+        '403': {description: Bukan anggota project dengan role berizin}
+        '409': {description: Sesi atau template berubah selama render}
+        '413': {description: Ukuran PDF melebihi batas}
+        '503': {description: Browser Run tidak tersedia}
   /sesi/{sesiId}/pdf:
     post:
       parameters:
@@ -393,6 +430,18 @@ paths:
         schema:
           type: integer
       summary: Generate PDF dari snapshot sesi yang konsisten; 409 jika revision/status berubah selama render
+      requestBody:
+        description: >-
+          Snapshot token dari pratinjau. Opsional untuk kompatibilitas API
+          lama; wajib disertakan oleh UI saat pengguna menekan Generate & Simpan.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expected_revision: {type: integer, minimum: 1}
+                expected_status: {type: string}
+                preview_html_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
       responses:
         '200':
           description: PDF binary

@@ -1,18 +1,28 @@
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Download, Plus, Save, Trash2, Upload } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Download, Eye, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { UatWorkflowPanel } from '@/components/UatWorkflowPanel';
 import { useAuth } from '@/store/authStore';
 import { useProjectLive } from '@/lib/useProjectLive';
-import { sesiApi, Item } from '@/api/sesi';
+import { sesiApi, Item, PdfPreviewToken } from '@/api/sesi';
 import { PageHeader } from '@/components/PageHeader';
+import { Modal } from '@/components/Modal';
 import { useToast } from '@/components/Toast';
 import { formatDateIndonesia, formatTimestampWib, formatPukulWib, weekdayIndonesia, weekdayMismatch } from '@/lib/date';
 
 export function SesiDetailPage() {
   const { id } = useParams<{ id: string }>();
   const sid = Number(id);
+  const sidRef = useRef(sid);
+  sidRef.current = sid;
+  const [preview, setPreview] = useState<{
+    sessionId:number; url:string; revision:number; status:string; htmlSha256:string; pages:number;
+  } | null>(null);
+  useEffect(() => { setPreview(null); }, [sid]);
+  useEffect(() => () => {
+    if (preview?.url) URL.revokeObjectURL(preview.url);
+  }, [preview?.url]);
   const toast = useToast();
   const [search,setSearch] = useState('');
   const [statusFilter,setStatusFilter] = useState('ALL');
@@ -36,6 +46,10 @@ export function SesiDetailPage() {
   const staleDraft = items !== null && draftRevision !== null && sesi !== undefined && draftRevision !== Number(sesi.revision??0);
   const role = user?.projects.find(p=>p.project_id === sesi?.project_id)?.role;
   const canEdit = ['ADMIN','TESTER'].includes(role||'');
+  const previewStale = !!preview && (
+    preview.sessionId !== sid || preview.revision !== Number(sesi?.revision) ||
+    preview.status !== sesi?.status || items !== null || conflict
+  );
   const visibleItems = working.map((it,idx)=>({...it,idx})).filter(it => (statusFilter==='ALL'||it.status===statusFilter) && (!search.trim() || [it.no,it.kebutuhan,it.hasil].some(t=>String(t||'').toLowerCase().includes(search.toLowerCase()))));
   const totalPages=Math.max(1,Math.ceil(visibleItems.length/pageSize));
   const safePage=Math.min(page,totalPages);
@@ -47,9 +61,34 @@ export function SesiDetailPage() {
     onError: (e: Error) => { if (e.message.includes('diubah pengguna lain') || e.message.includes('409')) setConflict(true); toast.push('error', e.message); }
   });
 
+  const previewMut = useMutation({
+    mutationFn: (sessionId: number) => sesiApi.previewPdf(sessionId),
+    onSuccess: (result, sessionId) => {
+      // Do not reveal a PDF from the previous route if navigation happened in flight.
+      if (sidRef.current !== sessionId) return;
+      setPreview({
+        sessionId, url: URL.createObjectURL(result.blob),
+        revision: result.sourceRevision, status: result.sourceStatus,
+        htmlSha256: result.sourceHtmlSha256, pages: result.pageCount
+      });
+    },
+    onError: (e: Error) => toast.push('error', e.message)
+  });
   const pdfMut = useMutation({
-    mutationFn: () => sesiApi.generatePdf(sid),
-    onSuccess: (blob) => { const url = URL.createObjectURL(blob as Blob); const a = document.createElement('a'); a.href = url; a.download = 'ulo-sesi-' + sid + '.pdf'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),60000); refetchOutputs();toast.push('success', 'PDF berhasil dibuat dan disimpan'); },
+    mutationFn: (p: {sessionId:number; revision:number; status:string; htmlSha256:string}) => {
+      const token: PdfPreviewToken = {
+        expected_revision:p.revision, expected_status:p.status, preview_html_sha256:p.htmlSha256
+      };
+      return sesiApi.generatePdf(p.sessionId, token);
+    },
+    onSuccess: (blob, p) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ulo-sesi-' + p.sessionId + '.pdf'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (sidRef.current === p.sessionId) { setPreview(null); refetchOutputs(); }
+      toast.push('success', 'PDF berhasil dibuat dan disimpan');
+    },
     onError: (e: Error) => toast.push('error', e.message)
   });
 
@@ -85,9 +124,10 @@ export function SesiDetailPage() {
             </button>
             {sesi.status==='DRAFT'&&['ADMIN','APPROVER'].includes(role||'')&&<button onClick={() => finalizeMut.mutate()} disabled={finalizeMut.isPending || !!items} className="px-3 py-2 text-sm border rounded-lg disabled:opacity-50">Finalisasi</button>}
             {sesi.status==='FINAL'&&role==='ADMIN'&&<button onClick={() => {if(window.confirm('Buka ulang sesi FINAL? Revisi baru wajib difinalisasi dan disetujui ulang.'))reopenMut.mutate()}} disabled={reopenMut.isPending} className="px-3 py-2 text-sm border rounded-lg disabled:opacity-50">Buka Ulang</button>}
-            {canEdit&&<button onClick={() => pdfMut.mutate()} disabled={pdfMut.isPending}
+            {canEdit&&<button type="button" onClick={() => previewMut.mutate(sid)}
+              disabled={previewMut.isPending || pdfMut.isPending || !!items || staleDraft || conflict || saveMut.isPending}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
-              <Download size={16} /> Generate PDF
+              <Eye size={16} /> {previewMut.isPending ? 'Menyiapkan pratinjau...' : 'Pratinjau PDF'}
             </button>}
           </>
         } />
@@ -101,6 +141,9 @@ export function SesiDetailPage() {
           </p>}
       </section>
       <div className="mb-3 text-xs text-slate-600">{connected ? '● Real-time tersambung' : '● Sinkronisasi berkala 15 detik'}{connected && <span className="ml-3">{online.filter(u=>u.sessionId===sid).length} pengguna di sesi ini</span>}</div>
+      {items !== null && canEdit && <p className="mb-3 text-xs text-amber-800" role="status">
+        Simpan perubahan test case sebelum membuka pratinjau PDF agar sesuai dengan data server.
+      </p>}
       {(staleDraft || conflict) && <div role="alert" className="mb-3 rounded border border-amber-400 bg-amber-50 p-3 text-sm">Sesi berubah di pengguna lain. Draft Anda tidak ditimpa. <button type="button" className="ml-2 underline" onClick={()=>{setItems(null);setDraftRevision(null);setConflict(false);void refetch();}}>Buang draft dan muat ulang</button></div>}
       {sesi.status==='FINAL'&&!sesi.finalized_at&&<p role="alert" className="mb-4 rounded border border-amber-400 p-3 text-sm text-amber-900">Sesi FINAL dari versi lama belum lulus pemeriksaan workflow. ADMIN harus buka ulang, lengkapi defect/retest, lalu finalisasi ulang sebelum proses persetujuan.</p>}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -163,6 +206,34 @@ export function SesiDetailPage() {
       </nav>
       <UatWorkflowPanel sessionId={sid} projectId={sesi.project_id} status={sesi.status} items={sesi.items||[]}
         selectedEvidenceItemId={selectedEvidenceItemId} onSelectEvidenceItem={setSelectedEvidenceItemId}/>
+      <Modal open={!!preview && preview.sessionId === sid} onClose={() => setPreview(null)}
+        title={`Pratinjau PDF · Sesi #${sid}`} size="lg">
+        {preview && preview.sessionId === sid && <div className="space-y-3">
+          <p className="text-xs text-slate-600">
+            Pratinjau sementara · {preview.pages} halaman · revisi {preview.revision}.
+            Belum tersimpan ke database atau Storage.
+          </p>
+          {previewStale && <p role="alert" className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+            Data sesi berubah sejak pratinjau dibuat. Tutup dan buat pratinjau baru sebelum menyimpan PDF.
+          </p>}
+          <iframe title={`Isi pratinjau PDF sesi #${sid}`} src={preview.url}
+            className="h-[58vh] min-h-[320px] w-full rounded border bg-slate-50" />
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <a href={preview.url} target="_blank" rel="noopener noreferrer"
+              className="text-blue-700 underline">Buka pratinjau di tab baru</a>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPreview(null)}
+                className="rounded border px-3 py-2">Tutup</button>
+              <button type="button"
+                onClick={() => pdfMut.mutate(preview)}
+                disabled={previewStale || pdfMut.isPending || previewMut.isPending || !!items || !canEdit}
+                className="inline-flex items-center gap-2 rounded bg-brand-600 px-3 py-2 font-medium text-white disabled:opacity-50">
+                <Download size={16} /> {pdfMut.isPending ? 'Menyimpan PDF...' : 'Generate & Simpan PDF'}
+              </button>
+            </div>
+          </div>
+        </div>}
+      </Modal>
     </>
   );
 }
