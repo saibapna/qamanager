@@ -48,3 +48,16 @@ The deploy script checks the current Worker settings before upload, preserves `H
 Cloudflare R2 subscription is currently inactive (HTTP 403, error 10042). After the account owner completes the R2 checkout, provision the private bucket `qamanager-staging-private` (APAC, Standard), with no r2.dev public URL or custom domain. Confirm that the application is **still** writing database bytea, not R2, until an independently validated data migration is deployed.
 
 Set the GitHub repository **variable** `QAMANAGER_R2_BUCKET=qamanager-staging-private` only after the bucket exists. The existing Worker deploy script will then attach `R2_FILES`, validate the exact bucket on subsequent deployments, and preserve it during future releases. Setting this variable before activation/bucket creation causes deployment failure. See `.github/docs/r2-activation-runbook.md` for cutover and recovery requirements.
+
+
+## Supabase private Storage Free (activation gated)
+
+Bucket `qamanager-private-files` in Supabase project `kyzrhgfynbtlmzfwvdyg` is private, has 6 MiB max object size and permits PDF, PNG, JPEG. It has **no Storage RLS policies** permitting `anon` or `authenticated` access. The Cloudflare Hono API remains the only user-facing entrypoint, enforcing project membership/roles before every upload and download. Do not expose service-role or secret credentials to the browser.
+
+**Applied DB migration:** `add_private_storage_keys_preserve_bytea` (also tracked in `db/migrations/20261121_supabase_private_file_storage.sql`) adds `storage_key` fields without removing a single historical file or audit record. Reads resolve a private Storage key only when present; older rows still read their original `bytea` data.
+
+**Operator step to enable new file uploads:** add the Supabase project's privileged legacy `service_role` JWT to the Cloudflare Worker `qamanager` as **secret** `SUPABASE_STORAGE_SERVICE_ROLE_KEY`. This is a backend-only secret; never put it into the React build, a GitHub variable, Git history, or chat. Use Cloudflare Dashboard > Workers & Pages > qamanager > Settings > Variables and Secrets > Add Secret, then verify after deployment. Do not reuse the JWT access/refresh secrets. The deployment pipeline preserves and verifies the optional Worker secret if present.
+
+When the secret is not installed, **uploads continue storing private PostgreSQL bytea** and existing files remain accessible. When installed, new evidence/fixtures/PDFs use private Supabase Storage and database metadata; all downloads validate SHA-256 and expected byte size. Object URLs are never returned to browsers. Legacy records are deliberately not backfilled or deleted in this release.
+
+**Acceptance gates:** verify authenticated create/read for each allowed file type, cross-project isolation (403), auditor visibility, storage checksum failures, storage API availability, and preservation of old bytea. Perform verified off-platform backups before production signoff. Supabase Free is not a compliance-guaranteed archival storage service.
