@@ -34,13 +34,14 @@ async function cloudflare(url, options = {}) {
   return data.result;
 }
 
-function assertBindings(settings, phase, requireRealtime = false, requireR2 = false) {
+function assertBindings(settings, phase, requireRealtime = false, requireR2 = false, requireStorageSecret = false) {
   const bindings = settings?.bindings;
   assert.ok(Array.isArray(bindings), `${phase}: cannot verify Worker bindings`);
   const actual = new Map(bindings.map(b => [b.name, b.type]));
   const required = new Map(expected);
   if (requireRealtime) required.set('PROJECT_LIVE', 'durable_object_namespace');
   if (requireR2) required.set('R2_FILES', 'r2_bucket');
+  if (requireStorageSecret) required.set('SUPABASE_STORAGE_SERVICE_ROLE_KEY', 'secret_text');
   assert.equal(actual.size, required.size, `${phase}: unexpected binding set; update deployment safeguards first`);
   for (const [name, type] of required) {
     assert.equal(actual.get(name), type, `${phase}: missing or changed binding ${name}`);
@@ -62,6 +63,7 @@ assert.equal(previousVersions.reduce((sum, version) => sum + version.percentage,
 const before = await cloudflare(`${apiBase}/settings`);
 const existingRealtime = before.bindings?.some(b => b.name === 'PROJECT_LIVE');
 const existingR2 = before.bindings?.find(b => b.name === 'R2_FILES');
+const existingStorageSecret = before.bindings?.some(b => b.name === 'SUPABASE_STORAGE_SERVICE_ROLE_KEY');
 if (existingR2 && existingR2.type !== 'r2_bucket') {
   throw new Error('R2_FILES already exists but is not an R2 binding');
 }
@@ -69,7 +71,7 @@ if (configuredR2Bucket && existingR2 && existingR2.bucket_name !== configuredR2B
   throw new Error('R2_FILES bucket mismatch; refusing to rebind an existing production resource');
 }
 const expectedR2Bucket = configuredR2Bucket || existingR2?.bucket_name || null;
-const { hyperdriveId } = assertBindings(before, 'preflight', existingRealtime, Boolean(existingR2));
+const { hyperdriveId } = assertBindings(before, 'preflight', existingRealtime, Boolean(existingR2), existingStorageSecret);
 assert.equal(before.compatibility_date, '2026-11-20', 'compatibility date changed; review before auto-deploy');
 assert.ok(before.compatibility_flags?.includes('nodejs_compat'), 'nodejs_compat missing');
 
@@ -100,7 +102,7 @@ try {
   uploadSucceeded = true;
 
   const after = await cloudflare(`${apiBase}/settings`);
-  const verified = assertBindings(after, 'post-deploy', true, Boolean(expectedR2Bucket));
+  const verified = assertBindings(after, 'post-deploy', true, Boolean(expectedR2Bucket), existingStorageSecret);
   assert.equal(verified.hyperdriveId, hyperdriveId, 'Hyperdrive binding changed');
   if (expectedR2Bucket) assert.equal(verified.r2Bucket, expectedR2Bucket, 'R2 bucket binding changed');
 
