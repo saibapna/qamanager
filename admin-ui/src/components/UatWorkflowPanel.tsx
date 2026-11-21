@@ -19,10 +19,12 @@ const downloadBlob=(blob:Blob,name:string)=>{
   link.href=url;link.download=name;link.click();
   window.setTimeout(()=>URL.revokeObjectURL(url),60000);
 };
-export function UatWorkflowPanel({sessionId,projectId,status,items}:{sessionId:number;projectId:number;status:string;items:Case[]}){
+export function UatWorkflowPanel({sessionId,projectId,status,items,selectedEvidenceItemId,onSelectEvidenceItem}:{sessionId:number;projectId:number;status:string;items:Case[];selectedEvidenceItemId?:number;onSelectEvidenceItem:(id:number|undefined)=>void}){
   const qc=useQueryClient(),toast=useToast();
   const role=useAuth(s=>s.user?.projects.find(p=>p.project_id===projectId)?.role);
-  const [itemId,setItemId]=useState<number|undefined>(undefined);
+  const itemId=selectedEvidenceItemId;
+  const setItemId=onSelectEvidenceItem;
+  const canUpload=status==='DRAFT'&&['ADMIN','TESTER'].includes(role||'');
   const [actionStatus,setActionStatus]=useState<Record<number,string>>({});
   const [retestNote,setRetestNote]=useState<Record<number,string>>({});
   const [waiverNote,setWaiverNote]=useState<Record<number,string>>({});
@@ -48,12 +50,14 @@ export function UatWorkflowPanel({sessionId,projectId,status,items}:{sessionId:n
   const approval=useMutation({mutationFn:(decision:string)=>api.post('/sesi/'+sessionId+'/approvals',{decision,note:approvalNote}),
     onSuccess:()=>{qc.invalidateQueries({queryKey:['approvals',sessionId]});qc.invalidateQueries({queryKey:['sesi',sessionId]});toast.push('success','Keputusan tercatat')},
     onError:(e:Error)=>toast.push('error',e.message)});
-  const upload=useMutation({mutationFn:async(file:File)=>{
-    if(!itemId)throw Error('Pilih test case');
+  const upload=useMutation({mutationFn:async({itemId:fileItemId,file}:{itemId:number;file:File})=>{
+    if(!Number.isSafeInteger(fileItemId)||fileItemId<=0)throw Error('Pilih test case');
+    if(file.size===0)throw Error('File bukti kosong');
     if(file.size>4*1024*1024)throw Error('Batas bukti 4 MiB');
+    if(file.type&&!['application/pdf','image/png','image/jpeg'].includes(file.type))throw Error('Format bukti harus PDF, PNG, atau JPEG');
     const form=new FormData();form.append('file',file);
-    return api.post('/sesi/'+sessionId+'/items/'+itemId+'/evidence',form);
-  },onSuccess:()=>{qc.invalidateQueries({queryKey:['evidence',sessionId,itemId]});toast.push('success','Bukti tersimpan')},
+    return api.post('/sesi/'+sessionId+'/items/'+fileItemId+'/evidence',form);
+  },onSuccess:(_response,vars)=>{qc.invalidateQueries({queryKey:['evidence',sessionId,vars.itemId]});toast.push('success','Bukti berhasil diunggah')},
     onError:(e:Error)=>toast.push('error',e.message)});
   const removeEvidence=useMutation({mutationFn:(evidenceId:number)=>{
       if(!itemId)throw Error('Pilih test case');
@@ -66,6 +70,41 @@ export function UatWorkflowPanel({sessionId,projectId,status,items}:{sessionId:n
     catch(e){toast.push('error',e instanceof Error?e.message:'Unduh gagal');}
   };
   return <div className="space-y-5 mt-6">
+    <section id="evidence-uji" aria-labelledby="evidence-uji-title" className="scroll-mt-6 rounded-xl border border-blue-200 bg-white p-5">
+      <h2 id="evidence-uji-title" className="mb-2 text-lg font-semibold text-slate-900">Bukti Uji / Evidence</h2>
+      <p className="mb-3 text-sm text-slate-700">Unggah bukti pengujian untuk test case yang dipilih. Format: PDF, PNG atau JPEG; maksimal 4 MiB per file. File privat hanya dapat diakses anggota project yang berwenang.</p>
+      <label htmlFor="evidence-test-case" className="block max-w-xl text-sm font-medium text-slate-900">Pilih test case
+        <select id="evidence-test-case" className={input+' mt-1'} aria-label="Pilih item untuk bukti" value={itemId||''}
+          disabled={upload.isPending}
+          onChange={e=>setItemId(Number(e.target.value)||undefined)}>
+          <option value="">Pilih test case untuk unggah atau melihat bukti</option>
+          {items.filter(i=>i.id).map(i=><option key={i.id} value={i.id}>{i.no} — {i.status}</option>)}
+        </select>
+      </label>
+      {!itemId&&<p className="mt-3 text-sm text-slate-600">Pilih test case di atas, atau klik <b>Unggah / Lihat</b> pada baris test case.</p>}
+      {itemId&&<div className="mt-4 space-y-3">
+        {canUpload?
+          <label htmlFor="evidence-file" className="block text-sm font-medium text-slate-900">
+            Unggah file bukti (PDF/PNG/JPEG, maksimal 4 MiB)
+            <input id="evidence-file" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+              aria-label="File bukti" disabled={upload.isPending}
+              onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';if(file&&itemId)upload.mutate({itemId,file})}}
+              className="mt-2 block w-full max-w-xl cursor-pointer rounded-lg border border-slate-300 p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-blue-700 file:px-3 file:py-2 file:text-white disabled:opacity-50" />
+          </label>
+        :<p className="rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" role="status">
+            Unggah hanya tersedia untuk ADMIN atau TESTER saat sesi berstatus DRAFT. Anda tetap dapat melihat bukti yang sudah tersimpan.
+          </p>}
+        {upload.isPending&&<p role="status" className="text-sm text-blue-800">Mengunggah dan memverifikasi bukti...</p>}
+        {!evidences.length&&<p className="text-sm text-slate-600">Belum ada bukti untuk test case ini.</p>}
+        {evidences.map(e=><div key={e.id} className="flex flex-wrap items-center justify-between gap-3 border-t py-3 text-sm">
+          <span className="break-all text-slate-800">{e.filename} · {(e.byte_size/1024).toFixed(1)} KiB</span>
+          <span className="flex flex-wrap items-center gap-3"><button type="button" className="text-blue-700 underline" onClick={()=>void download(e)}>Unduh</button>
+            {canUpload&&<button type="button" className="text-red-700 underline"
+              disabled={removeEvidence.isPending} onClick={()=>{if(window.confirm('Arsipkan bukti ini? Bukti historis tetap tersimpan.'))removeEvidence.mutate(e.id)}}>Arsipkan</button>}
+          </span>
+        </div>)}
+      </div>}
+    </section>
     <section className="rounded-xl border bg-white p-5">
       <h2 className="font-semibold mb-2">Defect & Retest ({defects.length})</h2>
       <p className="text-sm text-slate-600 mb-4">Status FAIL otomatis membuat defect. Defect perlu diperbaiki, retest PASS, atau waiver tertulis dari APPROVER sebelum sesi dapat difinalisasi.</p>
@@ -110,25 +149,6 @@ export function UatWorkflowPanel({sessionId,projectId,status,items}:{sessionId:n
           <button className={btn} disabled={!commentDraft[d.id]||comment.isPending} onClick={()=>comment.mutate(d.id)}>Komentar</button>
         </div>}
       </article>)}
-    </section>
-    <section className="rounded-xl border bg-white p-5">
-      <h2 className="font-semibold mb-2">Bukti Uji / Evidence</h2>
-      <p className="text-sm text-slate-600 mb-3">Pilih test case, lalu unggah PDF/PNG/JPEG maksimal 4 MiB. Bukti hanya dapat diunduh oleh anggota project.</p>
-      <select className={input} aria-label="Pilih item untuk bukti" value={itemId||''} onChange={e=>setItemId(Number(e.target.value)||undefined)}>
-        <option value="">Pilih test case</option>
-        {items.filter(i=>i.id).map(i=><option key={i.id} value={i.id}>{i.no} — {i.status}</option>)}
-      </select>
-      {itemId&&<div className="mt-3">
-        {status==='DRAFT'&&['ADMIN','TESTER'].includes(role||'')&&<label className="text-sm">Unggah bukti:
-          <input type="file" accept="application/pdf,image/png,image/jpeg" aria-label="File bukti" disabled={upload.isPending}
-            onChange={e=>{const file=e.target.files?.[0];if(file)upload.mutate(file)}} className="block mt-2"/>
-        </label>}
-        {evidences.map(e=><div key={e.id} className="py-2 flex justify-between border-t text-sm"><span>{e.filename} · {(e.byte_size/1024).toFixed(1)} KiB</span>
-          <span className="flex gap-3 items-center"><button className="text-blue-700 underline" onClick={()=>download(e)}>Unduh</button>
-            {status==='DRAFT'&&['ADMIN','TESTER'].includes(role||'')&&<button type="button" className="text-red-700 underline"
-              disabled={removeEvidence.isPending} onClick={()=>{if(window.confirm('Arsipkan bukti ini? Bukti historis tetap tersimpan.'))removeEvidence.mutate(e.id)}}>Arsipkan</button>}
-          </span></div>)}
-      </div>}
     </section>
     <section className="rounded-xl border bg-white p-5">
       <h2 className="font-semibold mb-2">Persetujuan Saksi dan Approver</h2>
