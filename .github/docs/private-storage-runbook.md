@@ -2,7 +2,11 @@
 
 ## Operational status
 
-QA Manager currently stores binary evidence (`ulo_evidence.data`), uploaded template fixtures (`template_fixtures.pdf_data`) and generated PDF outputs (`ulo_output.pdf_data`) as PostgreSQL `bytea` in the private `ulo_uat` schema. This is **not** a replacement for backed-up object storage. Cloudflare R2 access was checked on 21 November 2026; the R2 account API returned HTTP 403 code 10042: "Please enable R2 through the Cloudflare Dashboard." No R2 buckets or backup/restore drill can be claimed.
+QA Manager supports **private Supabase Storage** (`qamanager-private-files`) for new evidence, fixtures, and generated PDFs when the Cloudflare Worker secret `SUPABASE_STORAGE_SERVICE_ROLE_KEY` is present. The private bucket and active Worker binding were verified on 21 November 2026; `/api/status` returned `pdf_storage=supabase_private_storage`. The Worker alone holds the service-role secret. No browser client receives it, and all file operations must pass the application's project-level authorization before server-side object access.
+
+The backward-compatible migration `db/migrations/20261121_supabase_private_file_storage.sql` adds `storage_key` columns while preserving legacy PostgreSQL `bytea` records. Downloads select the backend per record; **never delete or rewrite legacy binary data as a side effect of enabling object storage**. Read-only SHA-256 and byte-length checks on 21 November verified 6/6 existing evidence and 3/3 existing PDF outputs. At that time the bucket contained 0 stored objects; successful authenticated binary upload/download and cross-project denial remain **unverified**.
+
+Cloudflare R2 remains unactivated (previous account API error 10042), but R2 is not a prerequisite for use of the explicitly selected Supabase private Storage backend. An object-storage activation is **not** proof of backup/restore, five-year retention, PKI signing, or official PDF visual acceptance.
 
 ## Enforced interim limits
 
@@ -19,7 +23,7 @@ QA Manager currently stores binary evidence (`ulo_evidence.data`), uploaded temp
 | PDF versions per session | 20 |
 | Generated PDF bytes per project | 256 MiB |
 
-The application locks the project record during file writes to serialize budget accounting across concurrent sessions, then commits each insertion and immutable audit entry together. Physical byte limits apply to stored bytes; evidence soft-delete retains the original bytes for forensic provenance and still counts toward quota. **A tombstone does not free storage capacity.** A budget exhaustion response is HTTP 413, with a descriptive error. Do not directly delete evidence or audit history to make space.
+The application locks the project record during file writes to serialize budget accounting across concurrent sessions, then commits each insertion and immutable audit entry together. The quotas are enforced using persisted metadata (`byte_size`/`size_bytes`) across both object storage and legacy binary records. Evidence soft-delete keeps forensic provenance and continues to count toward quota. **A tombstone does not free storage capacity.** A budget exhaustion response is HTTP 413, with a descriptive error. Do not directly delete evidence or audit history to make space.
 
 Administrators and auditors can see the project totals via `GET /api/projects/{projectId}/storage-usage` and the project's management dashboard; other roles get HTTP 403 and unauthenticated access gets HTTP 401.
 
@@ -46,8 +50,8 @@ Before purging any binary data, require an approved retention schedule, immutabl
 
 ## Gate before production sign-off
 
-1. Activate R2 or an approved private object store, with bucket-level private access, bindings, lifecycle, and quotas.
-2. Migrate existing files using content-addressed keys and SHA-256 integrity checks, preserve the API's authorization checks, and keep old records readable until reconciled.
+1. Verify the configured private Supabase Storage bucket, server-only Worker binding, real authenticated binary upload/download and cross-project 403, plus quota and lifecycle controls. Cloudflare R2 is optional.
+2. Before any optional migration of legacy binary data, obtain a preservation/rollback plan; compare SHA-256 and sizes for every object and keep old records readable until reconciled.
 3. Prove backup / restore of a representative PDF and evidence dataset, including session + project metadata and checksum equality.
 4. Obtain the official five-page PDF baseline and run authorized visual pixel-diff + SSIM >= 0.999; current SHA-256 byte comparison is not visual equivalence.
 5. Enable alerts with an approved notification destination and review actual PDF rendering performance with 71 test items.
