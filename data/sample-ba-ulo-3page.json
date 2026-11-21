@@ -1,0 +1,313 @@
+{
+  "penerbit": {
+    "dinas": "Dinas Komunikasi, Informatika dan Persandian Aceh",
+    "bidang": "Bidang Layanan E-Government"
+  },
+  "dokumen": {
+    "jenis": "ULO",
+    "totalPages": 3,
+    "signatureNotice": "Contoh sintetis, belum disahkan."
+  },
+  "project": {
+    "instansi": "INSTANSI CONTOH",
+    "bidang": "Bidang Layanan E-Government",
+    "kode_form_1": "S-APP.2.OBJ.3",
+    "kode_form_2": "S-APP.2.OBJ.4",
+    "kode_form_3": "S-APP.2.OBJ.5",
+    "form_title": "Form Uji Aplikasi"
+  },
+  "skpd": {
+    "nama": "INSTANSI CONTOH",
+    "kota": "Kota Contoh"
+  },
+  "aplikasi": {
+    "nama_singkat": "APLIKASI CONTOH",
+    "nama_panjang": "Aplikasi Uji Contoh",
+    "url": "https://example.invalid"
+  },
+  "sesi": {
+    "hari": "Senin",
+    "tanggal": "01 Januari 2026",
+    "pukul": "09.00",
+    "tempat": "Ruang Uji",
+    "jenis": "Uji Layak Operasi (ULO)"
+  },
+  "penguji": {
+    "nama": "PENGUJI CONTOH",
+    "jabatan": "Penguji",
+    "email": "",
+    "telp": "",
+    "nip": ""
+  },
+  "saksi": {
+    "nama": "SAKSI CONTOH",
+    "jabatan": "Saksi",
+    "email": "",
+    "telp": "",
+    "nip": ""
+  },
+  "ringkasan": {
+    "total": 29,
+    "lulus": 23,
+    "gagal": 6,
+    "belum": 0,
+    "catatan": "Data sintetis untuk tes tata letak.",
+    "temuan": ""
+  },
+  "pages": [
+    {
+      "pageNumber": 2,
+      "isLastPage": false,
+      "rows": [
+        {
+          "isSection": true,
+          "code": "A",
+          "text": "PENGUJIAN DASAR"
+        },
+        {
+          "no": "A1",
+          "kebutuhan": "Pengujian fungsi contoh 1",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A2",
+          "kebutuhan": "Pengujian fungsi contoh 2",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A3",
+          "kebutuhan": "Pengujian fungsi contoh 3",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        },
+        {
+          "no": "A4",
+          "kebutuhan": "Pengujian fungsi contoh 4",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A5",
+          "kebutuhan": "Pengujian fungsi contoh 5",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A6",
+          "kebutuhan": "Pengujian fungsi contoh 6",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A7",
+          "kebutuhan": "Pengujian fungsi contoh 7",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A8",
+          "kebutuhan": "Pengujian fungsi contoh 8",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        },
+        {
+          "no": "A9",
+          "kebutuhan": "Pengujian fungsi contoh 9",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A10",
+          "kebutuhan": "Pengujian fungsi contoh 10",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A11",
+          "kebutuhan": "Pengujian fungsi contoh 11",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A12",
+          "kebutuhan": "Pengujian fungsi contoh 12",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A13",
+          "kebutuhan": "Pengujian fungsi contoh 13",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        },
+        {
+          "no": "A14",
+          "kebutuhan": "Pengujian fungsi contoh 14",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A15",
+          "kebutuhan": "Pengujian fungsi contoh 15",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "A16",
+          "kebutuhan": "Pengujian fungsi contoh 16",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        }
+      ]
+    },
+    {
+      "pageNumber": 3,
+      "isLastPage": true,
+      "rows": [
+        {
+          "isSection": true,
+          "code": "B",
+          "text": "PENGUJIAN LANJUTAN"
+        },
+        {
+          "no": "B1",
+          "kebutuhan": "Pengujian fungsi contoh 1",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B2",
+          "kebutuhan": "Pengujian fungsi contoh 2",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B3",
+          "kebutuhan": "Pengujian fungsi contoh 3",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        },
+        {
+          "no": "B4",
+          "kebutuhan": "Pengujian fungsi contoh 4",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B5",
+          "kebutuhan": "Pengujian fungsi contoh 5",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B6",
+          "kebutuhan": "Pengujian fungsi contoh 6",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B7",
+          "kebutuhan": "Pengujian fungsi contoh 7",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B8",
+          "kebutuhan": "Pengujian fungsi contoh 8",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        },
+        {
+          "no": "B9",
+          "kebutuhan": "Pengujian fungsi contoh 9",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B10",
+          "kebutuhan": "Pengujian fungsi contoh 10",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B11",
+          "kebutuhan": "Pengujian fungsi contoh 11",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B12",
+          "kebutuhan": "Pengujian fungsi contoh 12",
+          "hasil": "Fungsi diuji dan beroperasi sesuai kriteria.",
+          "status": "PASS",
+          "isPass": true,
+          "isFail": false
+        },
+        {
+          "no": "B13",
+          "kebutuhan": "Pengujian fungsi contoh 13",
+          "hasil": "Fungsi gagal; membutuhkan perbaikan.",
+          "status": "FAIL",
+          "isPass": false,
+          "isFail": true
+        }
+      ]
+    }
+  ]
+}
