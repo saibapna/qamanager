@@ -286,10 +286,11 @@ Compliance profile disusun bersama unit hukum/pengelola SPBE dan di-versioning; 
 Referensi:
 - https://peraturan.bpk.go.id/Details/96913/perpres-no-95-tahun-2018
 - https://peraturan.bpk.go.id/Details/233483/perpres-no-132-tahun-2022
-- https://peraturan.bpk.go.id/Details/273981/perpres-no-82-tahun-
+- https://peraturan.bpk.go.id/Details/273981/perpres-no-82-tahun-2023
 - https://jdih.kemnaker.go.id/peraturan/detail/2692/peraturan-terkait-nomor-4-tahun-2021
 - https://peraturan.bpk.go.id/Details/309821/peraturan-bssn-no-8-tahun-2024
 - https://peraturan.bpk.go.id/Details/318647/perpres-no-46-tahun-2025
+- https://peraturan.bpk.go.id/Details/229798/uu-no-27-tahun-2022
 - https://peraturan.bpk.go.id/Download/112816/PP%20Nomor%2071%20Tahun%202019.pdf
 
 ## 15. Keputusan desain dan signoff yang masih dibutuhkan
