@@ -1,3 +1,4 @@
+import { formatTimestampWib } from '@/lib/date';
 import {useState} from 'react';
 import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import {api} from '@/api/client';
@@ -139,10 +140,10 @@ export function UatWorkflowPanel({sessionId,projectId,status,items,selectedEvide
           <button className={btn} disabled={!retestNote[d.id]||retest.isPending} onClick={()=>retest.mutate({id:d.id,result:'FAIL'})}>Retest FAIL</button>
         </div>}
         {(retestsByDefect[d.id]||[]).length>0&&<details className="rounded bg-slate-50 p-2"><summary className="cursor-pointer">Riwayat retest ({retestsByDefect[d.id].length})</summary>
-          {retestsByDefect[d.id].map(r=><p key={r.id} className="text-xs py-1">{r.status} · {r.note} · aktor #{r.actor_id} · {new Date(r.recorded_at).toLocaleString('id-ID')}</p>)}
+          {retestsByDefect[d.id].map(r=><p key={r.id} className="text-xs py-1">{r.status} · {r.note} · aktor #{r.actor_id} · {formatTimestampWib(r.recorded_at)}</p>)}
         </details>}
         {(commentsByDefect[d.id]||[]).length>0&&<details className="rounded bg-slate-50 p-2"><summary className="cursor-pointer">Komentar ({commentsByDefect[d.id].length})</summary>
-          {commentsByDefect[d.id].map(k=><p key={k.id} className="text-xs py-1">{k.comment} · aktor #{k.actor_id} · {new Date(k.created_at).toLocaleString('id-ID')}</p>)}
+          {commentsByDefect[d.id].map(k=><p key={k.id} className="text-xs py-1">{k.comment} · aktor #{k.actor_id} · {formatTimestampWib(k.created_at)}</p>)}
         </details>}
         {status==='DRAFT'&&['ADMIN','TESTER','WITNESS','APPROVER'].includes(role||'')&&<div className="flex gap-2">
           <input aria-label={'Komentar defect '+d.item_no} placeholder="Komentar defect" className={input+' md:w-2/3'} value={commentDraft[d.id]||''} onChange={e=>setCommentDraft({...commentDraft,[d.id]:e.target.value})}/>
@@ -153,7 +154,7 @@ export function UatWorkflowPanel({sessionId,projectId,status,items,selectedEvide
     <section className="rounded-xl border bg-white p-5">
       <h2 className="font-semibold mb-2">Persetujuan Saksi dan Approver</h2>
       <p className="text-sm text-slate-600 mb-3">Sesi harus FINAL sebelum saksi dan approver memberi keputusan. Dua peran wajib diisi oleh orang berbeda. Ini adalah persetujuan aplikasi, bukan tanda tangan PKI tersertifikasi.</p>
-      {approvals.map(a=><div className="text-sm py-2 border-t" key={a.id}>{a.role} · {a.decision} · {a.nama} · revisi {a.revision} · {new Date(a.occurred_at).toLocaleString('id-ID')}</div>)}
+      {approvals.map(a=><div className="text-sm py-2 border-t" key={a.id}>{a.role} · {a.decision} · {a.nama} · revisi {a.revision} · {formatTimestampWib(a.occurred_at)}</div>)}
       {status==='FINAL'&&['WITNESS','APPROVER'].includes(role||'')&&<div className="space-y-2 mt-2">
         <textarea className={input} aria-label="Catatan keputusan" placeholder="Catatan persetujuan/penolakan" rows={2} value={approvalNote} onChange={e=>setApprovalNote(e.target.value)}/>
         <div className="flex gap-2"><button className={btn} disabled={approval.isPending} onClick={()=>approval.mutate('APPROVED')}>Setujui</button>
@@ -163,7 +164,7 @@ export function UatWorkflowPanel({sessionId,projectId,status,items,selectedEvide
     <section className="rounded-xl border bg-white p-5">
       <h2 className="font-semibold">Riwayat Hasil UAT</h2>
       <p className="text-xs text-slate-500 mb-3">Riwayat append-only; setiap perubahan hasil dan retest tercatat.</p>
-      <div className="max-h-56 overflow-auto">{history.map((h,i)=><p className="text-xs py-2 border-t" key={i}>{h.item_no} · {h.old_status} → {h.new_status} · aktor #{h.actor_id} · {new Date(h.occurred_at).toLocaleString('id-ID')}</p>)}</div>
+      <div className="max-h-56 overflow-auto">{history.map((h,i)=><p className="text-xs py-2 border-t" key={i}>{h.item_no} · {h.old_status} → {h.new_status} · aktor #{h.actor_id} · {formatTimestampWib(h.occurred_at)}</p>)}</div>
     </section>
   </div>;
 }
