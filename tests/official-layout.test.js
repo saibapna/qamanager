@@ -20,7 +20,8 @@ for(const [file,expected,kind] of [
     assert.equal($('.header-table').length,expected);
     assert.equal($('.result-table').length,expected-1);
     assert.equal($('.signature-table').length,2);
-    assert.match($('.page-1 .summary-block').text(),new RegExp('Ringkasan Hasil '+kind));
+    if(expected===5) assert.match($('.page-1 .summary-block').text(),new RegExp('Ringkasan Hasil '+kind));
+    else assert.doesNotMatch($('.page-1 .summary-block').text(),/Ringkasan Hasil/);
     assert.match($('.page-1 .page-footer').text(),new RegExp('1 dari '+expected+' halaman'));
     const resultCount=$('.result-table tbody tr:not(.section-row)').length;
     assert.equal(resultCount,data.ringkasan.total);
