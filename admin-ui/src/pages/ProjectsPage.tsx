@@ -79,9 +79,9 @@ export function ProjectsPage() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-600">Memuat...</td></tr>
             ) : projects.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Belum ada project</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-600">Belum ada project</td></tr>
             ) : projects.map(p => (
               <tr key={p.id} className="border-b hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-xs">{p.kode}</td>
