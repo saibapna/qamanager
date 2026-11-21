@@ -52,7 +52,7 @@ test('evidence upload protects session/item quota and global project quota in on
   const end=workflow.indexOf("app.get('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId/download'",start);
   assert.ok(start>=0&&end>start);
   const route=workflow.slice(start,end);
-  const atomic=route.indexOf('return atomic(c,async()=>');
+  const atomic=route.indexOf('await atomic(c,async()=>');
   const projectLock=route.indexOf('SELECT id FROM projects WHERE id=$1 FOR UPDATE');
   const sessionLock=route.indexOf('SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE');
   const itemLock=route.indexOf('SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2 FOR UPDATE');
