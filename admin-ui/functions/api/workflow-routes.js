@@ -2,6 +2,7 @@
 import {createHash} from 'node:crypto';
 import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState,validateDefectEdit,runAtomic} from './workflow-core.js';
 import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
+import {storeFile,readFile,cleanupUncommitted,storageEnabled} from './private-storage.js';
 
 const good=(v,max=255)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
 const optional=v=>typeof v==='string'?v.trim():null;
@@ -362,7 +363,8 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     else fail(415,'Format bukti harus PDF, PNG, atau JPEG');
     const digest=createHash('sha256').update(bytes).digest('hex');
     const name=String(file.name||'evidence').replace(/[^\w.() -]/g,'_').slice(0,180);
-    return atomic(c,async()=>{
+    let createdKey=null;
+    try {return await atomic(c,async()=>{
       // Release the row locks only after both evidence insert and audit commit.
       // This also prevents concurrent upload #11 and changes after finalization.
       // Project lock serializes the global physical-byte budget across sessions.
@@ -383,15 +385,21 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
       if(wouldExceedQuota(sessionUsage.total_bytes,bytes.length,PRIVATE_STORAGE_LIMITS.evidenceSessionBytes)){
         fail(413,'Kapasitas bukti per sesi mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.evidenceSessionBytes));
       }
-      const row=await first(c,'INSERT INTO ulo_evidence(project_id,sesi_id,item_id,filename,mime,byte_size,sha256,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,filename,mime,byte_size,sha256,created_at',[pid,sid,iid,name,mime,bytes.length,digest,Buffer.from(bytes),c.get('uid')]);
+      createdKey=await storeFile(c.env,pid,'evidence',bytes,mime,digest);
+      const row=await first(c,'INSERT INTO ulo_evidence(project_id,sesi_id,item_id,filename,mime,byte_size,sha256,data,storage_key,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,filename,mime,byte_size,sha256,created_at',[pid,sid,iid,name,mime,bytes.length,digest,createdKey?null:Buffer.from(bytes),createdKey,c.get('uid')]);
       c.set('pid',pid);await audit(c,'EVIDENCE_UPLOADED','evidence',row.id,{item_id:iid});
       return c.json(row,201);
-    });
+    });}catch(error){await cleanupUncommitted(c.env,createdKey);throw error;}
   });
   app.get('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId/download',async c=>{
     await guard(c,'sesiId');const sid=id(c.req.param('sesiId')),iid=id(c.req.param('itemId')),eid=id(c.req.param('evidenceId'));
-    const row=await first(c,'SELECT data,mime,filename FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND id=$3 AND deleted_at IS NULL',[sid,iid,eid]);
+    const row=await first(c,'SELECT data,storage_key,sha256,byte_size,mime,filename FROM ulo_evidence WHERE sesi_id=$1 AND item_id=$2 AND id=$3 AND deleted_at IS NULL',[sid,iid,eid]);
     if(!row)fail(404,'Bukti tidak ditemukan');
+    if(row.storage_key){
+      if(!storageEnabled(c.env))fail(503,'Koneksi Storage belum tersedia');
+      const bytes=await readFile(c.env,row.storage_key,row.sha256,row.byte_size).catch(()=>fail(503,'Unduh Storage atau verifikasi checksum gagal'));
+      return fileDownload(bytes,row.mime,row.filename);
+    }
     return fileDownload(row.data,row.mime,row.filename);
   });
   app.delete('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId',async c=>{
