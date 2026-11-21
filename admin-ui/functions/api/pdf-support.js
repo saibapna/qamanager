@@ -2,7 +2,7 @@ import { renderSafeHandlebars } from './safe-handlebars.js';
 import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
-import { runAtomic } from './workflow-core.js';
+import { runAtomic, isPdfSnapshotCurrent } from './workflow-core.js';
 import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
 
 const MAX_FIXTURE_BYTES = PRIVATE_STORAGE_LIMITS.fixtureFile;
@@ -194,7 +194,7 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
       // A session can change while Browser Run renders HTML. Do not store a
       // PDF if results, metadata, or finalization state moved meanwhile.
       const current=await first(c,'SELECT revision,status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
-      if(!current||Number(current.revision)!==sourceRevision||String(current.status)!==sourceStatus){
+      if(!isPdfSnapshotCurrent(sourceRevision,sourceStatus,current)){
         fail(409,'Sesi berubah saat PDF sedang dibuat. Muat ulang dan generate kembali');
       }
       const usage = await first(c,
