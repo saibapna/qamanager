@@ -716,6 +716,8 @@
   "dokumen": {
     "jenis": "ULO",
     "totalPages": 5,
-    "signatureNotice": "Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan."
+    "signatureNotice": "Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan.",
+    "showSummaryFirst": true,
+    "showSummaryFinal": true
   }
 }
