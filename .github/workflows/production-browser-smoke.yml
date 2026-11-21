@@ -1,12 +1,9 @@
 name: Cloudflare production browser smoke
 on:
-  push:
+  workflow_run:
+    workflows: ["Build Cloudflare Hono Worker"]
+    types: [completed]
     branches: [main]
-    paths:
-      - '.github/workflows/production-browser-smoke.yml'
-      - '.github/playwright.production.config.mjs'
-      - '.github/tests/production-browser.spec.mjs'
-      - 'admin-ui/src/pages/LoginPage.tsx'
   workflow_dispatch: {}
   schedule:
     - cron: '0 2 * * *'
@@ -14,6 +11,7 @@ permissions:
   contents: read
 jobs:
   browser:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -24,5 +22,5 @@ jobs:
         run: npm install --no-save --ignore-scripts --no-audit --no-fund @playwright/test@1.65.1
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Exercise production login, deep-link routing and mobile layout
+      - name: Exercise production login, deep-link routing, keyboard focus and mobile layout
         run: npx playwright test --config=.github/playwright.production.config.mjs
