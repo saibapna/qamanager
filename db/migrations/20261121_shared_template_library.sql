@@ -42,7 +42,7 @@ END;
 $$;
 REVOKE ALL ON FUNCTION ulo_uat.enforce_template_share_published() FROM PUBLIC;
 
-DO $
+DO $trigger_guard$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_trigger
@@ -55,7 +55,7 @@ BEGIN
     FOR EACH ROW EXECUTE FUNCTION ulo_uat.enforce_template_share_published();
   END IF;
 END;
-$;
+$trigger_guard$;
 
 COMMENT ON TABLE ulo_uat.template_shares IS
   'Only an explicit source-project ADMIN may share a published template. No fixture, session, evidence or PDF content is shared. Imported templates are independent DRAFT copies.';
