@@ -1,7 +1,7 @@
 import { api } from './client';
 export interface Aplikasi {id:number;project_id:number;nama_singkat:string;nama_panjang?:string;url?:string;}
 export interface SesiCreate {template_id:number;hari?:string;tanggal?:string;tempat?:string;jenis?:string;}
-export interface SesiSummary {id:number;status:string;created_at:string;template_id:number;aplikasi_id:number;}
+export interface SesiSummary {id:number;status:string;created_at:string;template_id:number;aplikasi_id:number;hari?:string|null;tanggal?:string|null;pukul?:string|null;}
 export const aplikasiApi={
   list: (projectId:number)=>api.get<Aplikasi[]>(`/projects/${projectId}/aplikasi`).then(r=>r.data),
   create:(projectId:number,data:{nama_singkat:string;nama_panjang?:string;url?:string})=>
