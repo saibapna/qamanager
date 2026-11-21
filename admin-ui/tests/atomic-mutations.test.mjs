@@ -51,7 +51,7 @@ test('production evidence mutation guards finalization and quota under same tran
   const end = workflow.indexOf("app.get('/api/sesi/:sesiId/items/:itemId/evidence/:evidenceId/download'",start);
   assert.ok(start >= 0 && end > start);
   const upload = workflow.slice(start,end);
-  const transaction = upload.indexOf('return atomic(c,async()=>');
+  const transaction = upload.indexOf('await atomic(c,async()=>');
   const lockSession = upload.indexOf('SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE');
   const lockItem = upload.indexOf('SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2 FOR UPDATE');
   const quota = upload.indexOf('existing.total>=PRIVATE_STORAGE_LIMITS.evidenceItemCount');

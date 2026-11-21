@@ -28,6 +28,7 @@ const execute=(failure,options={})=>spawnSync(process.execPath,['--import',mock,
     CLOUDFLARE_API_TOKEN:'unit-test-never-a-valid-token',
     MOCK_HEALTH_FAILURE:failure?'1':'0',
     MOCK_R2_EXISTING:options.existingR2?'1':'0',
+    MOCK_STORAGE_SECRET:options.storageSecret?'1':'0',
     QAMANAGER_R2_BUCKET:options.bucket||''
   },encoding:'utf8',timeout:18000
 });
@@ -60,4 +61,10 @@ test('deployment fails closed when configured bucket differs from existing R2 bi
   assert.notEqual(run.status,0);
   assert.match(run.stderr,/bucket mismatch/);
   assert.doesNotMatch(run.stderr,/MOCK_ROLLBACK_RECEIVED/);
+});
+
+test('optional Supabase Storage secret survives Worker code deployment',()=>{
+  const run=execute(false,{storageSecret:true});
+  assert.equal(run.status,0,run.stderr);
+  assert.match(run.stdout,/Deploy PASS/);
 });

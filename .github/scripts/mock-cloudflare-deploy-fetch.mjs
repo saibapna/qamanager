@@ -6,6 +6,7 @@ const json = (result,status=200)=>new Response(JSON.stringify({success:true,resu
 const response = (content,status,type)=>new Response(content,{status,headers:{'Content-Type':type}});
 let uploaded=false;
 const existingR2 = process.env.MOCK_R2_EXISTING === '1';
+const storageSecretConfigured = process.env.MOCK_STORAGE_SECRET === '1';
 const configuredR2Bucket = process.env.QAMANAGER_R2_BUCKET || '';
 const r2Binding = {name:'R2_FILES',type:'r2_bucket',bucket_name:existingR2?'qamanager-staging-private':configuredR2Bucket};
 const bindings=[
@@ -32,6 +33,7 @@ globalThis.fetch=async(input,options={})=>{
     return json({bindings:[
       ...bindings,
       ...(existingR2?[r2Binding]:[]),
+      ...(storageSecretConfigured?[{name:'SUPABASE_STORAGE_SERVICE_ROLE_KEY',type:'secret_text'}]:[]),
       ...(uploaded?[{name:'PROJECT_LIVE',type:'durable_object_namespace',class_name:'ProjectLive'}]:[]),
       ...(uploaded&&!existingR2&&configuredR2Bucket?[r2Binding]:[])
     ],compatibility_date:'2026-11-20',compatibility_flags:['nodejs_compat'],observability:{enabled:true}});
