@@ -35,7 +35,7 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
       evidence:{...evidence,limit_bytes:PRIVATE_STORAGE_LIMITS.evidenceProjectBytes},
       fixtures:{...fixtures,limit_bytes:PRIVATE_STORAGE_LIMITS.fixtureProjectBytes},
       pdf:{...pdf,limit_bytes:PRIVATE_STORAGE_LIMITS.pdfProjectBytes},
-      note:'Tombstone evidence tetap dihitung karena bytea fisik masih tersimpan'
+      note:'Bukti yang dihapus secara logis tetap dihitung dalam kuota, baik pada penyimpanan binary lama maupun object storage'
     });
   });
 
