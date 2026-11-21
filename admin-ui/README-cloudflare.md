@@ -29,6 +29,9 @@ Project administrators manage the canonical test plan. Once the project has sess
 - Rate limiting is backed by PostgreSQL hashed IP/account keys.
 - Authorization resolves tenant membership and role on the server.
 
+## Interim private storage and metrics
+
+Cloudflare R2 is not currently enabled for the connected account (R2 API reports 403 / 10042). Evidence, fixtures, and PDFs therefore remain in private PostgreSQL `bytea` under explicit per-object, per-session, per-template, and per-project limits. Evidence soft-deletes retain bytes and still consume quota. Administrator/Auditor storage capacity is visible on `/projects/:id/manage`, backed by `GET /api/projects/:projectId/storage-usage`. Worker-generated PDF log `qamanager_pdf_metrics` contains render and total latency in milliseconds; the 5-second PDF benchmark is **not yet verified**. See `.github/docs/private-storage-runbook.md` for limits, R2 enablement, controlled migration, backup/restore and retention requirements.
 ## Release blockers
 See GitHub issue #4. Qualified PKI signatures, official visual PDF fixture SSIM/heatmap validation, production file storage/backup/restore drill and full multi-role approval integration tests are not implied by a passing build or health check.
 

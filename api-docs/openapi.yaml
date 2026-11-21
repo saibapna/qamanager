@@ -89,6 +89,13 @@ components:
           type: string
         aktif:
           type: boolean
+    StorageCount:
+      type: object
+      required: [objects, total_bytes, limit_bytes]
+      properties:
+        objects: {type: integer}
+        total_bytes: {type: integer, format: int64}
+        limit_bytes: {type: integer, format: int64}
     PortfolioRow:
       type: object
       required: [id, kode, nama, instansi, total_sessions, signed_sessions, total_items, pass_items, fail_items, pending_items, open_defects]
@@ -423,7 +430,7 @@ paths:
         required: true
         schema:
           type: integer
-      summary: Diff visual SSIM
+      summary: Perbandingan SHA-256 byte PDF (bukan visual SSIM)
       responses:
         '200':
           description: OK
@@ -526,6 +533,29 @@ paths:
       responses:
         '200': {description: Array progress sesi}
         '403': {description: Akses project ditolak}
+  /projects/{projectId}/storage-usage:
+    get:
+      summary: Penggunaan penyimpanan pribadi (PostgreSQL bytea) dalam batas project, ADMIN/AUDITOR
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer}
+      responses:
+        '200':
+          description: Evidence termasuk tombstone, baseline fixture dan PDF, beserta batas byte
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [evidence, fixtures, pdf, note]
+                properties:
+                  evidence: { $ref: '#/components/schemas/StorageCount' }
+                  fixtures: { $ref: '#/components/schemas/StorageCount' }
+                  pdf: { $ref: '#/components/schemas/StorageCount' }
+                  note: {type: string}
+        '401': {description: Belum login}
+        '403': {description: Bukan ADMIN atau AUDITOR project}
   /projects/{projectId}/dashboard:
     get:
       summary: Dashboard jumlah sesi, status item, defect (scoped project)

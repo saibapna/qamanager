@@ -54,7 +54,7 @@ test('production evidence mutation guards finalization and quota under same tran
   const transaction = upload.indexOf('return atomic(c,async()=>');
   const lockSession = upload.indexOf('SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE');
   const lockItem = upload.indexOf('SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2 FOR UPDATE');
-  const quota = upload.indexOf('existing.total>=10');
+  const quota = upload.indexOf('existing.total>=PRIVATE_STORAGE_LIMITS.evidenceItemCount');
   const audit = upload.indexOf("audit(c,'EVIDENCE_UPLOADED'");
   assert.ok(transaction >= 0 && transaction < lockSession && lockSession < lockItem && lockItem < quota && quota < audit);
   assert.match(upload, /status!=='DRAFT'/);
