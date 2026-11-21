@@ -12,6 +12,8 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils fonts-liberation libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64
       - run: npm install --no-audit --no-fund
       - run: pip install -r requirements.txt
+      - name: Exercise 5-page PNG heatmap comparator (identical and changed)
+        run: python scripts/test-visual-diff.py
       - name: Generate 71-item ULO reference candidate
         run: node src/generate.js data/sample-sirikap.json output/hasil-ulo.pdf
       - name: Enforce exactly five output pages
