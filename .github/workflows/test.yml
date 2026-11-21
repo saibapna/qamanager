@@ -8,6 +8,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: npm install --no-audit --no-fund
+      - name: Verify generated published template SQL has no drift
+        run: npm run seed:templates && git diff --exit-code -- db/seed-templates.sql db/migrations/20261121_official_ba_ulo_uat_v110.sql
       - run: npm test
       - run: npm run openapi
       - run: cd admin-ui && npm install --no-audit --no-fund && node --test tests/*.test.mjs && npm run build
