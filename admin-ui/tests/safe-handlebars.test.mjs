@@ -15,6 +15,9 @@ test('Cloudflare AST renderer produces five-page canonical ULO document',async()
   assert.equal((html.match(/class="page page-/g)||[]).length,5);
   assert.match(html,/S-APP\.2\.OBJ\.3/);
   assert.match(html,/Ringkasan Hasil ULO/);
+  assert.match(html,/class="signature-table"/);
+  assert.match(html,/class="status-mark status-fail"/);
+  assert.match(html,/Hal. 1 dari 5 halaman/);
   assert.doesNotMatch(html,/\{\{[^}]*\}\}/);
   assert.match(html,/19880511 202521 1 045/);
   assert.match(html,/SIRIKAP/);
