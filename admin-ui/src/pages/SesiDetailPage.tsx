@@ -8,6 +8,7 @@ import { useProjectLive } from '@/lib/useProjectLive';
 import { sesiApi, Item } from '@/api/sesi';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
+import { formatDateIndonesia, formatTimestampWib, formatPukulWib, weekdayIndonesia, weekdayMismatch } from '@/lib/date';
 
 export function SesiDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -90,6 +91,15 @@ export function SesiDetailPage() {
             </button>}
           </>
         } />
+      <section aria-label="Tanggal dan waktu pengujian" className="mb-4 rounded-xl border bg-white p-4 text-sm space-y-1">
+        <p><span className="font-semibold">Tanggal pengujian:</span> <time dateTime={sesi.tanggal||undefined}>{formatDateIndonesia(sesi.tanggal)}</time>{sesi.pukul ? ' · ' + formatPukulWib(sesi.pukul) : ''}</p>
+        {sesi.hari && <p className="text-slate-600">Hari pada dokumen: {sesi.hari}</p>}
+        <p className="text-slate-600">Dicatat dalam sistem: {formatTimestampWib(sesi.created_at)}</p>
+        {weekdayMismatch(sesi.hari,sesi.tanggal)&&
+          <p role="alert" className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-amber-900">
+            Hari dalam dokumen ({sesi.hari}) tidak sesuai kalender ({weekdayIndonesia(sesi.tanggal)}, {formatDateIndonesia(sesi.tanggal)}). Periksa sumber; data historis tidak diubah otomatis.
+          </p>}
+      </section>
       <div className="mb-3 text-xs text-slate-600">{connected ? '● Real-time tersambung' : '● Sinkronisasi berkala 15 detik'}{connected && <span className="ml-3">{online.filter(u=>u.sessionId===sid).length} pengguna di sesi ini</span>}</div>
       {(staleDraft || conflict) && <div role="alert" className="mb-3 rounded border border-amber-400 bg-amber-50 p-3 text-sm">Sesi berubah di pengguna lain. Draft Anda tidak ditimpa. <button type="button" className="ml-2 underline" onClick={()=>{setItems(null);setDraftRevision(null);setConflict(false);void refetch();}}>Buang draft dan muat ulang</button></div>}
       {sesi.status==='FINAL'&&!sesi.finalized_at&&<p role="alert" className="mb-4 rounded border border-amber-400 p-3 text-sm text-amber-900">Sesi FINAL dari versi lama belum lulus pemeriksaan workflow. ADMIN harus buka ulang, lengkapi defect/retest, lalu finalisasi ulang sebelum proses persetujuan.</p>}
@@ -104,7 +114,7 @@ export function SesiDetailPage() {
       {outputs.length>0&&<div className="bg-white rounded-xl border p-4 mb-6">
         <p className="font-semibold text-sm mb-2">Riwayat PDF — path dapat digunakan untuk perbandingan fixture</p>
         {outputs.map(o=><div key={o.id} className="flex items-center justify-between gap-3 py-1">
-          <span className="text-xs font-mono text-slate-600 break-all">v{o.versi} · {o.pdf_path}</span>
+          <span className="text-xs font-mono text-slate-600 break-all">v{o.versi} · {o.pdf_path} · {formatTimestampWib(o.generated_at)}</span>
           <button type="button" className="text-xs text-blue-700 hover:underline whitespace-nowrap" onClick={() => downloadOutput(o.id, o.versi)}>Unduh</button>
         </div>)}
       </div>}

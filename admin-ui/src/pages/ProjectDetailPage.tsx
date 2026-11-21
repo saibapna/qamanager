@@ -12,6 +12,7 @@ import {inputCls,FormField} from '@/components/FormField';
 import {useToast} from '@/components/Toast';
 import {useAuth} from '@/store/authStore';
 import {ProjectLivePanel} from '@/components/ProjectLivePanel';
+import {formatDateIndonesia,formatTimestampWib,weekdayMismatch} from '@/lib/date';
 
 function SesiList({app,templateId,canEdit}:{app:Aplikasi;templateId:number;canEdit:boolean}){
   const navigate=useNavigate();const qc=useQueryClient();const toast=useToast();
@@ -26,7 +27,11 @@ function SesiList({app,templateId,canEdit}:{app:Aplikasi;templateId:number;canEd
     </div>
     {sessions.length===0?<p className="text-xs text-slate-600">Belum ada sesi</p>:
       sessions.map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm">
-        <Link to={`/sesi/${s.id}`} className="hover:text-brand-600">Sesi #{s.id} · {s.status}</Link>
+        <div>
+          <Link to={`/sesi/${s.id}`} className="hover:text-brand-600">Sesi #{s.id} · {s.status}</Link>
+          <p className="text-xs text-slate-600">{s.tanggal ? 'Tanggal uji: '+formatDateIndonesia(s.tanggal) : 'Dibuat: '+formatTimestampWib(s.created_at)}</p>
+          {weekdayMismatch(s.hari,s.tanggal)&&<p className="text-xs text-amber-800">Hari sumber perlu diverifikasi</p>}
+        </div>
         {canEdit&&s.status==='DRAFT'&&<Link to={`/sesi/${s.id}#evidence-uji`}
           className="rounded border border-blue-700 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50">
           Unggah bukti

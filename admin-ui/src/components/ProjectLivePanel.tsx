@@ -1,3 +1,4 @@
+import { formatTimestampWib } from '@/lib/date';
 import { useQuery } from '@tanstack/react-query';
 import { liveApi } from '@/api/live';
 import { useProjectLive } from '@/lib/useProjectLive';
@@ -35,7 +36,7 @@ export function ProjectLivePanel({ projectId }: { projectId: number }) {
         <div className="max-h-48 overflow-y-auto">
           {events.map(e => <div key={e.id} className="text-xs border-t py-2">
             <span className="font-medium">{e.actor || 'Sistem'}</span> · {e.action}
-            <span className="block text-slate-500">{new Date(e.occurred_at).toLocaleString('id-ID')}</span>
+            <span className="block text-slate-500">{formatTimestampWib(e.occurred_at)}</span>
           </div>)}
         </div>
       </section>
