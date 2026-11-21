@@ -7,6 +7,7 @@ type BindingEnv = {
   PROJECT_LIVE?: DurableObjectNamespace;
   JWT_ACCESS_SECRET?: string;
   JWT_REFRESH_SECRET?: string;
+  SUPABASE_STORAGE_SERVICE_ROLE_KEY?: string;
 };
 
 const mimeMap: Record<string, string> = {
