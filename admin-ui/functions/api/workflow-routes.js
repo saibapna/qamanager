@@ -42,7 +42,8 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     const result=await q(c,`SELECT p.id,p.kode,p.nama,p.instansi,
         sessions.total_sessions,sessions.signed_sessions,
         items.total_items,items.pass_items,items.fail_items,items.pending_items,
-        defects.open_defects
+        defects.open_defects,
+        approvals.awaiting_witness,approvals.awaiting_approver,approvals.rejected_decisions
       FROM projects p JOIN project_members pm ON pm.project_id=p.id
       CROSS JOIN LATERAL (
         SELECT count(*)::int AS total_sessions,
@@ -61,6 +62,30 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
         SELECT count(*)::int AS open_defects FROM ulo_defects d
         WHERE d.project_id=p.id AND d.status NOT IN('VERIFIED','WAIVED')
       ) defects
+      CROSS JOIN LATERAL (
+        SELECT
+          count(*) FILTER (
+            WHERE s.status='FINAL' AND s.finalized_at IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision
+                AND a.role='WITNESS' AND a.decision='APPROVED'
+            )
+          )::int AS awaiting_witness,
+          count(*) FILTER (
+            WHERE s.status='FINAL' AND s.finalized_at IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision
+                AND a.role='WITNESS' AND a.decision='APPROVED'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision
+                AND a.role='APPROVER'
+            )
+          )::int AS awaiting_approver,
+          (SELECT count(*)::int FROM ulo_approvals a
+           WHERE a.project_id=p.id AND a.decision='REJECTED') AS rejected_decisions
+        FROM ulo_sesi s WHERE s.project_id=p.id
+      ) approvals
       WHERE pm.user_id=$1 AND p.aktif=TRUE ORDER BY p.kode`,[c.get('uid')]);
     return c.json(result.rows);
   });
@@ -186,7 +211,14 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     const sessions=await first(c,"SELECT count(*)::int total,count(*) FILTER(WHERE status='DRAFT')::int drafts,count(*) FILTER(WHERE status='FINAL')::int finals,count(*) FILTER(WHERE status='SIGNED')::int signed FROM ulo_sesi WHERE project_id=$1",[pid]);
     const items=await first(c,"SELECT count(*)::int total,count(*) FILTER(WHERE i.status='PASS')::int pass,count(*) FILTER(WHERE i.status='FAIL')::int fail,count(*) FILTER(WHERE i.status='BELUM')::int belum FROM ulo_item i JOIN ulo_sesi s ON s.id=i.sesi_id WHERE s.project_id=$1",[pid]);
     const defects=await first(c,"SELECT count(*)::int total,count(*) FILTER(WHERE status NOT IN('VERIFIED','WAIVED'))::int unresolved FROM ulo_defects WHERE project_id=$1",[pid]);
-    return c.json({sessions,items,defects});
+    const approvals=await first(c,`SELECT count(*) FILTER (WHERE s.status='FINAL' AND s.finalized_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision AND a.role='WITNESS' AND a.decision='APPROVED'))::int AS awaiting_witness,
+      count(*) FILTER (WHERE s.status='FINAL' AND s.finalized_at IS NOT NULL
+      AND EXISTS (SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision AND a.role='WITNESS' AND a.decision='APPROVED')
+      AND NOT EXISTS (SELECT 1 FROM ulo_approvals a WHERE a.sesi_id=s.id AND a.revision=s.revision AND a.role='APPROVER'))::int AS awaiting_approver,
+      (SELECT count(*)::int FROM ulo_approvals a WHERE a.project_id=$1 AND a.decision='REJECTED') AS rejected_decisions
+      FROM ulo_sesi s WHERE s.project_id=$1`,[pid]);
+    return c.json({sessions,items,defects,approvals});
   });
   app.get('/api/projects/:projectId/audit',async c=>{
     const pid=await guard(c,'projectId',['ADMIN','AUDITOR']);
