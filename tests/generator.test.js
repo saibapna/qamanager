@@ -36,6 +36,11 @@ describe('HTML Structure', () => {
   });
   test('header berisi 3 kode form', () => {
     const t = $('.header-table').first().text();
+    $('.header-table').each((_,table)=>{
+      assert.match($(table).text(),/S-APP\\.2\\.OBJ\\.3/);
+      assert.match($(table).text(),/S-APP\\.2\\.OBJ\\.4/);
+      assert.match($(table).text(),/S-APP\\.2\\.OBJ\\.5/);
+    });
     assert.match(t, /S-APP\.2\.OBJ\.3/);
     assert.match(t, /S-APP\.2\.OBJ\.4/);
     assert.match(t, /S-APP\.2\.OBJ\.5/);
