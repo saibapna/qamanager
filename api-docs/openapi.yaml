@@ -166,6 +166,8 @@ paths:
           description: Login sukses
         '401':
           description: Kredensial salah
+        '429':
+          description: Batas autentikasi per IP atau akun tercapai; Retry-After 900 detik
   /auth/me:
     get:
       summary: Profil user
