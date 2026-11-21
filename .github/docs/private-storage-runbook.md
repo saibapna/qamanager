@@ -23,6 +23,12 @@ The application locks the project record during file writes to serialize budget 
 
 Administrators and auditors can see the project totals via `GET /api/projects/{projectId}/storage-usage` and the project's management dashboard; other roles get HTTP 403 and unauthenticated access gets HTTP 401.
 
+## Consistent PDF snapshots
+
+PDF generation records the source UAT session revision, finalization status, and SHA-256 digest of the rendered source HTML as immutable PDF_GENERATED audit metadata. Immediately before storing the rendered PDF, the Worker locks the UAT session and rechecks both revision and status. A concurrent test-case edit, metadata patch, retest, reopen, finalization, or signing results in HTTP 409 and the stale rendered PDF is not archived. Operators can inspect audit metadata in the ADMIN/AUDITOR project Audit Trail, without disclosing the source HTML or personal data.
+
+This prevents a stale output being misrepresented as a current session snapshot. It does not establish pixel-perfect PDF matching, qualified PKI signatures, approval stamps inside the PDF, or repeatable output bytes. The official visual baseline and independent signoff remain required.
+
 ## Operational monitoring and cleanup
 
 Inspect Cloudflare Worker logs using `qamanager_pdf_metrics` (project, session, `render_ms`, `total_ms`, page count, output bytes) and error logs `qamanager_pdf_renderer`. The 5-second performance goal remains **unverified** without a production sample of 71-item PDF runs. The renderer performs page layout + Browser Run + PostgreSQL writes; measure end-to-end p50/p95, including cold starts, before establishing a service-level objective.
