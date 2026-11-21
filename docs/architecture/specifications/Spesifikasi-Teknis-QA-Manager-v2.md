@@ -1,6 +1,8 @@
 # Technical Specification — QA Manager 2.0
+
+[Indeks dokumentasi](../../README.md) · [Domain Arsitektur](../README.md)
 **Versi:** 2.0.0-draft | **Tanggal:** 21 November 2026 | **Status:** PROPOSED / design-to-implement  
-**Referensi:** [PRD QA Manager v2](../prd/PRD-QA-Manager-v2.md) | Repo: saibapna/qamanager @ 82b7e5b2cbf9f4725a4ccc37568c067ec716bd86  
+**Referensi:** [PRD QA Manager v2](../../product/prd/PRD-QA-Manager-v2.md) | Repo: saibapna/qamanager @ 82b7e5b2cbf9f4725a4ccc37568c067ec716bd86  
 **Implementasi saat ini:** React 18 + Vite + TypeScript, Hono 4.x pada Cloudflare Worker, PostgreSQL/Supabase via Hyperdrive, Browser Run untuk PDF. Express di root adalah backend legacy/lokal. Detail teknis version-pinned harus diverifikasi dari package-lock dan hasil build pada setiap PR.
 
 > **Status pembuktian.** **Observed** = berkas/kode terlihat saat review, **Target** = kontrak desain, **Blocked** = tidak dapat dinyatakan siap tanpa bukti/provider/mandat. Dokumen ini bukan bukti telah dideploy. Jangan menerapkan contoh SQL secara langsung ke production tanpa migration review, backup, dan perbandingan skema aktual.
@@ -80,8 +82,8 @@ db/
   verification/    # post-migration assertions
 api-docs/
   openapi-v2.yaml
-prd/
-spec-tech/
+docs/product/prd/
+docs/architecture/specifications/
 ```
 Folder target tidak perlu dibuat sekaligus; pindahkan modul dengan karakterisasi tes dan route parity.
 

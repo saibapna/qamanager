@@ -1,6 +1,8 @@
 # Spesifikasi Teknis Template PDF 1=1
 
-> **Spesifikasi historis template ULO/UAT.** Syarat PDF 1:1 tetap memerlukan fixture resmi. Lihat [Technical Specification QA Manager v2](./Spesifikasi-Teknis-QA-Manager-v2.md) untuk acceptance berbasis snapshot, visual diff/SSIM, keamanan dan storage.
+[Indeks dokumentasi](../../README.md) · [Domain Quality](../README.md)
+
+> **Spesifikasi historis template ULO/UAT.** Syarat PDF 1:1 tetap memerlukan fixture resmi. Lihat [Technical Specification QA Manager v2](../../architecture/specifications/Spesifikasi-Teknis-QA-Manager-v2.md) untuk acceptance berbasis snapshot, visual diff/SSIM, keamanan dan storage.
 
 ## Layout Halaman
 | Atribut | Nilai |

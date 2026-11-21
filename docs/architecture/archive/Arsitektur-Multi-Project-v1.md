@@ -1,6 +1,8 @@
 # Arsitektur Multi-Project
 
-> **Spesifikasi historis.** Desain target QA/QC SDLC terintegrasi: [Technical Specification QA Manager v2](./Spesifikasi-Teknis-QA-Manager-v2.md). Model existing ULO/UAT harus tetap kompatibel selama migrasi.
+[Indeks dokumentasi](../../README.md) · [Arsip Arsitektur](../README.md)
+
+> **Spesifikasi historis.** Desain target QA/QC SDLC terintegrasi: [Technical Specification QA Manager v2](../specifications/Spesifikasi-Teknis-QA-Manager-v2.md). Model existing ULO/UAT harus tetap kompatibel selama migrasi.
 
 ## Model Domain
 

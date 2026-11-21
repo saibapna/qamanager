@@ -1,8 +1,10 @@
 # Product Requirements Document (PRD) — QA Manager 2.0
+
+[Indeks dokumentasi](../../README.md) · [Domain Produk](../README.md)
 **Produk:** QA Manager — Platform QA/QC SDLC untuk Instansi Pemerintah  
 **Versi dokumen:** 2.0.0-draft | **Tanggal:** 21 November 2026 | **Status:** PROPOSED, belum disetujui pemilik produk  
 **Repositori acuan:** saibapna/qamanager, main @ 82b7e5b2cbf9f4725a4ccc37568c067ec716bd86  
-**Dokumen teknis pasangan:** [Spesifikasi-Teknis-QA-Manager-v2.md](../spec-tech/Spesifikasi-Teknis-QA-Manager-v2.md)  
+**Dokumen teknis pasangan:** [Spesifikasi-Teknis-QA-Manager-v2.md](../../architecture/specifications/Spesifikasi-Teknis-QA-Manager-v2.md)  
 **Pemilik kebijakan/otoritas penerimaan:** harus ditetapkan oleh instansi melalui penugasan resmi. Pencantuman nama instansi dalam PRD v1 bukan bukti persetujuan versi ini.
 
 > Konvensi status: **EXISTING-CODE** = terlihat di repositori, bukan berarti sudah lolos uji produksi; **TARGET** = fitur yang harus dibangun; **DEPENDENCY** = memerlukan persetujuan, infrastruktur, atau bukti eksternal; **OUT-OF-SCOPE** = tidak dibangun dalam ruang lingkup ini. Setiap kriteria baru berstatus TARGET kecuali dinyatakan lain.
@@ -303,4 +305,4 @@ Referensi:
 - DEC-06: Ambang quality gate, severity matrix, SLA, risk acceptance dan penguji independen.
 - DEC-07: NFR/SLO setelah benchmark, ukuran beban, dan anggaran operasional.
 
-**Status signoff:** belum ada persetujuan formal. PRD menjadi baseline implementasi hanya setelah keputusan di atas disahkan dan revisinya dicatat. Dokumen lama [PRD-ULO-UAT-Manager.md](./PRD-ULO-UAT-Manager.md) tetap menjadi catatan sejarah requirement v1, bukan pengganti PRD ini.
+**Status signoff:** belum ada persetujuan formal. PRD menjadi baseline implementasi hanya setelah keputusan di atas disahkan dan revisinya dicatat. Dokumen lama [PRD-ULO-UAT-Manager.md](../archive/PRD-ULO-UAT-Manager-v1.md) tetap menjadi catatan sejarah requirement v1, bukan pengganti PRD ini.
