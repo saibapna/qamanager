@@ -1,5 +1,9 @@
 # PRD Aplikasi ULO & UAT Manager
 
+[Indeks dokumentasi](../../README.md) · [Arsip Produk](../README.md)
+
+> **DOKUMEN HISTORIS v1.0.** PRD ULO/UAT tetap dipertahankan untuk traceability/kompatibilitas. Usulan cakupan QA/QC seluruh SDLC adalah [PRD QA Manager v2](../prd/PRD-QA-Manager-v2.md). Belum ada signoff formal untuk mengganti baseline ini.
+
 **Versi:** 1.0  
 **Tanggal:** 18 November 2026  
 **Pemilik Produk:** Dinas Komunikasi, Informatika dan Persandian Aceh
