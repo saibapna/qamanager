@@ -150,7 +150,11 @@ export function ProjectOpsPage(){
     {section==='audit'&&reader&&<section className="rounded-xl bg-white border p-5">
       <h2 className="font-semibold mb-3">Riwayat Audit Append-only</h2>
       {audit.map(a=><div key={a.id} className="border-b py-3 text-sm"><b>{a.action}</b> · {a.entity_type} #{a.entity_id} · actor #{a.actor_id}
-        <p className="text-slate-500">{new Date(a.occurred_at).toLocaleString('id-ID')}</p></div>)}
+        <p className="text-slate-500">{new Date(a.occurred_at).toLocaleString('id-ID')}</p>
+        <details className="mt-2"><summary className="cursor-pointer text-xs text-blue-700">Metadata audit dan bukti checksum</summary>
+          <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-3 text-xs">{JSON.stringify(a.metadata,null,2)}</pre>
+        </details>
+      </div>)}
       <div className="flex gap-3 mt-4"><button className={btn} disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-100))}>Sebelumnya</button>
         <button className={btn} disabled={audit.length<100} onClick={()=>setOffset(offset+100)}>Berikutnya</button></div>
     </section>}
