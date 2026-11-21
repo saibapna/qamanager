@@ -1,6 +1,7 @@
 
 import {createHash} from 'node:crypto';
 import {hashCloudflarePassword,PROJECT_ROLES,checkApprovalState,validateDefectEdit,runAtomic} from './workflow-core.js';
+import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
 
 const good=(v,max=255)=>typeof v==='string'&&v.trim().length>0&&v.length<=max;
 const optional=v=>typeof v==='string'?v.trim():null;
@@ -24,6 +25,19 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
   };
   // Portfolio is always restricted to projects where this specific user is a current member.
   // LATERAL aggregates prevent joins from multiplying item and defect counts.
+  app.get('/api/projects/:projectId/storage-usage',async c=>{
+    const pid=await guard(c,'projectId',['ADMIN','AUDITOR']);
+    const evidence=await first(c,'SELECT count(*)::int objects,coalesce(sum(byte_size),0)::bigint AS total_bytes FROM ulo_evidence WHERE project_id=$1',[pid]);
+    const fixtures=await first(c,'SELECT count(*)::int objects,coalesce(sum(f.size_bytes),0)::bigint AS total_bytes FROM template_fixtures f JOIN templates t ON t.id=f.template_id WHERE t.project_id=$1',[pid]);
+    const pdf=await first(c,'SELECT count(*)::int objects,coalesce(sum(o.size_bytes),0)::bigint AS total_bytes FROM ulo_output o JOIN ulo_sesi s ON s.id=o.sesi_id WHERE s.project_id=$1',[pid]);
+    return c.json({
+      evidence:{...evidence,limit_bytes:PRIVATE_STORAGE_LIMITS.evidenceProjectBytes},
+      fixtures:{...fixtures,limit_bytes:PRIVATE_STORAGE_LIMITS.fixtureProjectBytes},
+      pdf:{...pdf,limit_bytes:PRIVATE_STORAGE_LIMITS.pdfProjectBytes},
+      note:'Tombstone evidence tetap dihitung karena bytea fisik masih tersimpan'
+    });
+  });
+
   app.get('/api/dashboard/portfolio',async c=>{
     const result=await q(c,`SELECT p.id,p.kode,p.nama,p.instansi,
         sessions.total_sessions,sessions.signed_sessions,
@@ -308,7 +322,7 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     if(!String(c.req.header('content-type')||'').startsWith('multipart/form-data'))fail(415,'Multipart/form-data wajib');
     const form=await c.req.formData().catch(()=>fail(400,'Multipart tidak valid'));
     const file=form.get('file');
-    if(!file||typeof file.arrayBuffer!=='function'||!file.size||file.size>4194304)fail(413,'Bukti maksimal 4 MiB');
+    if(!file||typeof file.arrayBuffer!=='function'||!file.size||file.size>PRIVATE_STORAGE_LIMITS.evidenceFile)fail(413,'Bukti maksimal 4 MiB');
     const bytes=new Uint8Array(await file.arrayBuffer());let mime;
     if(bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46) mime='application/pdf';
     else if(bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47) mime='image/png';
@@ -319,12 +333,24 @@ export function installWorkflowRoutes(app,{q,first,guard,id,fail,audit,json,publ
     return atomic(c,async()=>{
       // Release the row locks only after both evidence insert and audit commit.
       // This also prevents concurrent upload #11 and changes after finalization.
+      // Project lock serializes the global physical-byte budget across sessions.
+      await q(c,'SELECT id FROM projects WHERE id=$1 FOR UPDATE',[pid]);
       const session=await first(c,'SELECT status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
       if(session?.status!=='DRAFT')fail(409,'Hanya sesi DRAFT dapat diubah');
       const item=await first(c,'SELECT id FROM ulo_item WHERE sesi_id=$1 AND id=$2 FOR UPDATE',[sid,iid]);
       if(!item)fail(404,'Item tidak ditemukan');
       const existing=await first(c,'SELECT count(*)::int AS total FROM ulo_evidence WHERE item_id=$1 AND deleted_at IS NULL',[iid]);
-      if(existing.total>=10)fail(409,'Maksimal 10 bukti aktif per test case');
+      if(existing.total>=PRIVATE_STORAGE_LIMITS.evidenceItemCount)fail(409,'Maksimal 10 bukti aktif per test case');
+      // Count all stored bytes including soft-deleted evidence: delete is a
+      // tombstone operation, not physical storage reclamation.
+      const projectUsage=await first(c,'SELECT coalesce(sum(byte_size),0)::bigint AS total_bytes FROM ulo_evidence WHERE project_id=$1',[pid]);
+      if(wouldExceedQuota(projectUsage.total_bytes,bytes.length,PRIVATE_STORAGE_LIMITS.evidenceProjectBytes)){
+        fail(413,'Kapasitas bukti per project mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.evidenceProjectBytes));
+      }
+      const sessionUsage=await first(c,'SELECT coalesce(sum(byte_size),0)::bigint AS total_bytes FROM ulo_evidence WHERE sesi_id=$1',[sid]);
+      if(wouldExceedQuota(sessionUsage.total_bytes,bytes.length,PRIVATE_STORAGE_LIMITS.evidenceSessionBytes)){
+        fail(413,'Kapasitas bukti per sesi mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.evidenceSessionBytes));
+      }
       const row=await first(c,'INSERT INTO ulo_evidence(project_id,sesi_id,item_id,filename,mime,byte_size,sha256,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,filename,mime,byte_size,sha256,created_at',[pid,sid,iid,name,mime,bytes.length,digest,Buffer.from(bytes),c.get('uid')]);
       c.set('pid',pid);await audit(c,'EVIDENCE_UPLOADED','evidence',row.id,{item_id:iid});
       return c.json(row,201);
