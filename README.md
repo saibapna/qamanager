@@ -1,5 +1,7 @@
 # ULO/UAT Manager
 
+> **Usulan redesign QA/QC SDLC v2:** baca [PRD QA Manager v2](prd/PRD-QA-Manager-v2.md) dan [Technical Specification QA Manager v2](spec-tech/Spesifikasi-Teknis-QA-Manager-v2.md). Keduanya **draft desain target**, bukan klaim fitur sudah ada atau siap produksi. Runtime ULO/UAT dan master audit issue #4 tetap berlaku hingga implementasi v2 diuji dan disetujui.
+
 Hono/Cloudflare Workers API + React admin UI (Cloudflare target), dengan Express sebagai backend legacy/lokal untuk Uji Layak Operasi (ULO) / User Acceptance Test (UAT) multi-project. SIRIKAP dan SIMPEG memiliki 71 kasus uji masing-masing. Status `PASS`/`FAIL`/`BELUM` dihitung otomatis.
 
 > **Status:** MVP dalam pengujian. PDF **belum** terbukti identik 1:1 dengan lampiran resmi (fixture baseline belum disediakan). Ini bukan aplikasi yang telah lolos audit produksi.
