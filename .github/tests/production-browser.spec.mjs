@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test('protected deep link presents accessible login when unauthenticated', async ({page}) => {
   await page.goto('/projects/1/manage', {waitUntil:'domcontentloaded'});
@@ -64,4 +65,45 @@ test('mocked signed-in layout provides a visible keyboard skip link to main cont
   await expect(page.locator('#qa-main-content')).toBeFocused();
   const dims=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:window.innerWidth}));
   expect(dims.scroll).toBeLessThanOrEqual(dims.viewport+1);
+});
+
+
+async function assertWcag21Aa(page, surface) {
+  const results=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
+  const errors=results.violations.map(v=>({
+    id:v.id,
+    impact:v.impact,
+    description:v.description,
+    targets:v.nodes.map(n=>n.target.join(' ')).slice(0,5)
+  }));
+  expect(errors, 'WCAG 2.1 AA violations on '+surface).toEqual([]);
+}
+
+test('WCAG 2.1 AA: production unauthenticated login controls', async ({page}) => {
+  await page.goto('/login', {waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'ULO/UAT Manager'})).toBeVisible();
+  await assertWcag21Aa(page,'login');
+});
+
+test('WCAG 2.1 AA: mobile login controls', async ({page}) => {
+  await page.setViewportSize({width:375,height:812});
+  await page.goto('/login', {waitUntil:'domcontentloaded'});
+  await expect(page.getByLabel('Email',{exact:true})).toBeVisible();
+  await assertWcag21Aa(page,'mobile login');
+});
+
+test('WCAG 2.1 AA: authenticated-looking project dashboard (synthetic browser mock)', async ({page}) => {
+  await page.route('**/api/auth/me', route => route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({id:9999,nama:'Accessibility Tester',email:'synthetic@example.invalid',is_platform_admin:false,projects:[]})
+  }));
+  await page.route('**/api/projects', route => route.fulfill({
+    status:200,contentType:'application/json',body:'[]'
+  }));
+  await page.route('**/api/dashboard/portfolio', route => route.fulfill({
+    status:200,contentType:'application/json',body:'[]'
+  }));
+  await page.goto('/projects', {waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Projects'})).toBeVisible();
+  await assertWcag21Aa(page,'mocked project dashboard');
 });

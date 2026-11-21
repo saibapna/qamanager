@@ -3,11 +3,13 @@ export function FormField({ label, error, required, children }: {
 }) {
   return (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
+      <label className="block">
+        <span className="block text-sm font-medium text-slate-700 mb-1">
+          {label} {required && <span aria-hidden="true" className="text-red-600">*</span>}
+        </span>
+        {children}
       </label>
-      {children}
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-700 mt-1">{error}</p>}
     </div>
   );
 }
