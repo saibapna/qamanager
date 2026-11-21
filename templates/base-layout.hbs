@@ -94,11 +94,13 @@
       </td>
     </tr>
   </table>
+  {{#if dokumen.showSummaryFirst}}
   <div class="summary-block">
     <strong>Ringkasan Hasil {{dokumen.jenis}} :</strong>
     <div>{{ringkasan.total}} item diuji - {{ringkasan.lulus}} lulus, {{ringkasan.gagal}} gagal, {{ringkasan.belum}} belum diuji. {{ringkasan.catatan}}</div>
-    {{#if dokumen.signatureNotice}}<div class="signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   </div>
+  {{/if}}
+  {{#if dokumen.signatureNotice}}<div class="summary-block signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   <div class="page-footer"><div class="rule">Hal. 1 dari {{dokumen.totalPages}} halaman</div></div>
 </div>
 
@@ -122,7 +124,9 @@
     </tbody>
   </table>
   {{#if this.isLastPage}}
+    {{#if @root.dokumen.showSummaryFinal}}
     <div class="summary-block"><strong>Ringkasan Hasil {{@root.dokumen.jenis}} :</strong><div>{{@root.ringkasan.total}} item - {{@root.ringkasan.lulus}} lulus, {{@root.ringkasan.gagal}} gagal, {{@root.ringkasan.belum}} belum diuji. {{@root.ringkasan.catatan}} {{@root.ringkasan.temuan}}</div></div>
+    {{/if}}
     <table class="signature-table signature-final" aria-label="Ruang pengesahan hasil">
       <tr>
         <td>Disaksikan oleh :<div class="signature-space"></div><div class="signature-name">{{@root.saksi.nama}}</div><div class="signature-meta">{{#if @root.saksi.nip}}NIP. {{@root.saksi.nip}}{{/if}}</div></td>
