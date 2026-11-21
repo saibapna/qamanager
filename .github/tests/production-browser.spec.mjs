@@ -107,3 +107,94 @@ test('WCAG 2.1 AA: authenticated-looking project dashboard (synthetic browser mo
   await expect(page.getByRole('heading',{name:'Projects'})).toBeVisible();
   await assertWcag21Aa(page,'mocked project dashboard');
 });
+
+
+async function installSyntheticAuthenticatedUi(page) {
+  const project={id:1,kode:'DEMO',nama:'Project E2E Sintetik',instansi:'Instansi Sintetik',bidang:null,aktif:true};
+  const person={id:9999,nama:'Penguji Sintetik',email:'synthetic@example.invalid',aktif:true,is_platform_admin:false,
+    projects:[{project_id:1,kode:'DEMO',nama:project.nama,role:'ADMIN'}]};
+  const plan=[{no:'A1',kategori:'A',kebutuhan:'Pengujian login contoh',urutan:1,gate_required:false},
+    {no:'A2',kategori:'A',kebutuhan:'Pengujian pencarian contoh',urutan:2,gate_required:false}];
+  const template={id:10,versi:'1.0',nama:'Template Sintetik',published:true};
+  const storage={evidence:{objects:0,total_bytes:0,limit_bytes:268435456},
+    fixtures:{objects:0,total_bytes:0,limit_bytes:104857600},
+    pdf:{objects:0,total_bytes:0,limit_bytes:268435456},
+    note:'Testing synthetic values'};
+  const paths={
+    '/api/auth/me':person,
+    '/api/projects':[project],
+    '/api/dashboard/portfolio':[{
+      ...project,total_sessions:0,signed_sessions:0,total_items:0,pass_items:0,
+      fail_items:0,pending_items:0,open_defects:0,awaiting_witness:0,
+      awaiting_approver:0,rejected_decisions:0
+    }],
+    '/api/projects/1':project,
+    '/api/projects/1/dashboard':{
+      sessions:{total:0,drafts:0,finals:0,signed:0},
+      items:{total:0,pass:0,fail:0,belum:0},
+      defects:{total:0,unresolved:0},
+      approvals:{awaiting_witness:0,awaiting_approver:0,rejected_decisions:0}
+    },
+    '/api/projects/1/storage-usage':storage,
+    '/api/projects/1/members':[{
+      id:9999,nama:person.nama,email:person.email,role:'ADMIN',aktif:true
+    }],
+    '/api/projects/1/people':[],
+    '/api/projects/1/plan':plan,
+    '/api/projects/1/audit':[],
+    '/api/projects/1/templates':[template],
+    '/api/projects/1/aplikasi':[{
+      id:22,project_id:1,nama_singkat:'DEMO APP',nama_panjang:'Aplikasi Sintetik',url:null
+    }],
+    '/api/projects/1/live-dashboard':[],
+    '/api/aplikasi/22/sesi':[]
+  };
+  await page.route('**/api/**', route=>{
+    const pathname=new URL(route.request().url()).pathname;
+    return route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify(Object.prototype.hasOwnProperty.call(paths,pathname)?paths[pathname]:[])});
+  });
+}
+
+test('WCAG 2.1 AA: synthetic admin project operations in each management tab', async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.goto('/projects/1/manage',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Pengelolaan Project'})).toBeVisible();
+  for(const tab of ['Dashboard','Anggota & Role','Penguji & Saksi','Test Plan','Audit Trail']){
+    await page.getByRole('button',{name:tab,exact:true}).click();
+    await assertWcag21Aa(page,'synthetic project operations '+tab);
+  }
+});
+
+test('WCAG 2.1 AA: synthetic project detail and application cards',async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.goto('/projects/1',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Project E2E Sintetik'})).toBeVisible();
+  await assertWcag21Aa(page,'synthetic project detail');
+});
+
+test('WCAG 2.1 AA: synthetic PDF validation form',async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.goto('/validate',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Validasi PDF'})).toBeVisible();
+  await assertWcag21Aa(page,'synthetic PDF validation');
+});
+
+test('WCAG 2.1 AA: synthetic PDF validation mobile width does not overflow',async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.setViewportSize({width:375,height:812});
+  await page.goto('/validate',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Validasi PDF'})).toBeVisible();
+  const dimensions=await page.evaluate(()=>({
+    scroll:document.documentElement.scrollWidth,viewport:window.innerWidth
+  }));
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.viewport+1);
+  await assertWcag21Aa(page,'synthetic mobile PDF validation');
+});
+
+test('WCAG 2.1 AA: portfolio with an authorized project',async ({page})=>{
+  await installSyntheticAuthenticatedUi(page);
+  await page.goto('/projects',{waitUntil:'domcontentloaded'});
+  await expect(page.getByText('Project E2E Sintetik',{exact:true})).toBeVisible();
+  await assertWcag21Aa(page,'synthetic authorized portfolio');
+});

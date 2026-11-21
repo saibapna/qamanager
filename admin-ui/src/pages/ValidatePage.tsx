@@ -29,7 +29,7 @@ export function ValidatePage() {
   return (
     <>
       <PageHeader title="Validasi PDF" subtitle="Periksa kecocokan berkas output dengan fixture baseline (SHA-256)" />
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border p-6">
           <FormField label="Project" required>
             <select value={projectId || ''} onChange={e => setProjectId(Number(e.target.value))} className={inputCls}>
@@ -57,7 +57,7 @@ export function ValidatePage() {
             <h3 className="font-semibold">Hasil</h3>
             {result && <Badge variant={result.ok ? 'success' : 'danger'}>{result.ok ? 'IDENTIK' : 'BERBEDA'}</Badge>}
           </div>
-          {!result ? <p className="text-sm text-slate-400">Belum ada hasil</p>
+          {!result ? <p className="text-sm text-slate-600">Belum ada hasil</p>
             : <pre className="bg-slate-900 text-slate-100 text-xs p-4 rounded-lg overflow-auto max-h-[400px] whitespace-pre-wrap">{result.log}</pre>}
         </div>
       </div>

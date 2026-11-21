@@ -24,7 +24,7 @@ function SesiList({app,templateId,canEdit}:{app:Aplikasi;templateId:number;canEd
       <div><p className="font-semibold">{app.nama_singkat}</p><p className="text-xs text-slate-500">{app.nama_panjang}</p></div>
       {canEdit&&templateId>0&&<button className="text-xs bg-brand-600 text-white px-3 py-2 rounded" onClick={()=>create.mutate()} disabled={create.isPending}>+ Sesi ULO</button>}
     </div>
-    {sessions.length===0?<p className="text-xs text-slate-400">Belum ada sesi</p>:
+    {sessions.length===0?<p className="text-xs text-slate-600">Belum ada sesi</p>:
       sessions.map(s=><Link key={s.id} to={`/sesi/${s.id}`} className="block text-sm border-t py-2 hover:text-brand-600">Sesi #{s.id} · {s.status}</Link>)}
   </div>;
 }

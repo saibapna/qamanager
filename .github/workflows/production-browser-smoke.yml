@@ -1,5 +1,11 @@
 name: Cloudflare production browser smoke
 on:
+  pull_request:
+    paths:
+      - 'admin-ui/src/**'
+      - '.github/tests/production-browser.spec.mjs'
+      - '.github/playwright.production.config.mjs'
+      - '.github/workflows/production-browser-smoke.yml'
   workflow_run:
     workflows: ["Build Cloudflare Hono Worker"]
     types: [completed]
@@ -22,5 +28,26 @@ jobs:
         run: npm install --no-save --ignore-scripts --no-audit --no-fund @playwright/test@1.65.1 @axe-core/playwright@4.14.0
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Exercise production login, keyboard focus, mobile layout and axe WCAG 2.1 AA
+      - name: Build frontend from PR for accurate pre-merge UI tests
+        if: github.event_name == 'pull_request'
+        run: cd admin-ui && npm install --no-audit --no-fund && npm run build
+      - name: Launch PR Vite preview (no backend credentials needed)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd admin-ui
+          nohup npx vite preview --host 127.0.0.1 --port 4173 > /tmp/qamanager-vite-preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/login > /dev/null; then
+              echo "PR preview ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/qamanager-vite-preview.log
+          exit 1
+      - name: Exercise login, user flows, keyboard, mobile and axe WCAG 2.1 AA
+        env:
+          QA_BROWSER_BASE_URL: ${{ github.event_name == 'pull_request' && 'http://127.0.0.1:4173' || 'https://qamanager.saipulbahri-it.workers.dev' }}
         run: npx playwright test --config=.github/playwright.production.config.mjs
