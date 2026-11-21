@@ -6,6 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
+import {storageEnabled} from './private-storage.js';
 import { assertCanonicalItems, checkFinalization, assertBulkItemTransition, runAtomic, accountThrottleKey } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
@@ -102,7 +103,7 @@ app.use('/api/*',async(c,next)=>{
 });
 app.get('/api/status',c=>{
   const missing=missingBindings(c);
-  return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:c.env.BROWSER?.quickAction?'browser-run':'browser-binding-missing',pdf_storage:'supabase_private_bytea',r2_binding:c.env.R2_FILES?.get?'configured_not_migrated':'not_configured',pdf_comparison:'sha256_exact_bytes',missing_bindings:missing},missing.length?503:200);
+  return c.json({service:'qamanager',runtime:'cloudflare-hono',ready:missing.length===0,database:missing.includes('HYPERDRIVE')?'not_configured':'configured_not_checked',pdf:c.env.BROWSER?.quickAction?'browser-run':'browser-binding-missing',pdf_storage:storageEnabled(c.env)?'supabase_private_storage':'supabase_private_bytea',r2_binding:c.env.R2_FILES?.get?'configured_not_migrated':'not_configured',pdf_comparison:'sha256_exact_bytes',missing_bindings:missing},missing.length?503:200);
 });
 app.get('/api/health',async c=>{await q(c,'SELECT 1');return c.json({ok:true,runtime:'hono',database:'connected'});});
 
