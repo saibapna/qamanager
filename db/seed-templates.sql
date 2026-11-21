@@ -263,20 +263,21 @@ SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
   body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; line-height: 1.18; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .page { break-after: page; page-break-after: always; }
   .page:last-child { break-after: auto; page-break-after: auto; }
+  .page-1 { padding-top: 3mm; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .header-table { margin-bottom: 11mm; }
-  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; }
+  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; font-size: 9pt; }
   .header-left { width: 80%; font-weight: 700; }
   .header-left.header-title { font-weight: 400; font-size: 10pt; }
   .header-right { width: 20%; font-weight: 700; }
   .page-results .header-table { margin-bottom: 7mm; }
-  .identity-table td { border: .55pt solid #222; padding: 1.55mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
+  .identity-table td { border: .55pt solid #222; padding: 1.75mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
   .identity-table .section-label { font-weight: 700; background: #dedede; padding: 1.1mm 1.5mm; }
   .identity-table .field-label { white-space: nowrap; }
   .identity-table .approval-text { line-height: 1.3; }
   .signature-table { margin-top: -0.55pt; }
   .signature-table td { border: .55pt solid #222; width: 50%; vertical-align: top; padding: 2.3mm 2mm; text-align: center; }
-  .signature-table .signature-space { height: 18mm; }
+  .signature-table .signature-space { height: 23mm; }
   .signature-table .signature-name { font-weight: 500; }
   .signature-table .signature-meta { font-size: 8pt; }
   .signature-table .signature-warning { color: #6b7280; font-size: 7pt; padding-top: 1mm; }
@@ -393,7 +394,7 @@ SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
 
 </body>
 </html>
-','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AKSES & DASHBOARD","B":"PARAMETER - DAFTAR OPD","C":"PARAMETER - KECAMATAN","D":"PARAMETER - GAMPONG","E":"PARAMETER - URUSAN","F":"INOVASI DAERAH - DAFTAR & INDIKATOR","G":"INOVASI DAERAH - TAMBAH","H":"KELITBANGAN & LAPORAN","I":"UTILITY - PENGGUNA & GROUP","J":"UTILITY - OTORITAS & PENGATURAN","K":"NAVIGASI & LAINNYA","L":"GATE ULO YANG BELUM TERBUKTI"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":20},"3":{"fromOrder":21,"toOrder":42},"4":{"fromOrder":43,"toOrder":60},"5":{"fromOrder":61,"toOrder":71}}'::jsonb,'15f0196d1734a3290eed11d1ce5710c40faf320888a55bcfda478ae88f98210e',TRUE
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if @root.penerbit.dinas}}{{@root.penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if @root.penerbit.bidang}}{{@root.penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if @root.project.form_title}}{{@root.project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AKSES & DASHBOARD","B":"PARAMETER - DAFTAR OPD","C":"PARAMETER - KECAMATAN","D":"PARAMETER - GAMPONG","E":"PARAMETER - URUSAN","F":"INOVASI DAERAH - DAFTAR & INDIKATOR","G":"INOVASI DAERAH - TAMBAH","H":"KELITBANGAN & LAPORAN","I":"UTILITY - PENGGUNA & GROUP","J":"UTILITY - OTORITAS & PENGATURAN","K":"NAVIGASI & LAINNYA","L":"GATE ULO YANG BELUM TERBUKTI"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":20},"3":{"fromOrder":21,"toOrder":42},"4":{"fromOrder":43,"toOrder":60},"5":{"fromOrder":61,"toOrder":71}}'::jsonb,'ebbf088dda5152fcbc8a93de7cdae203326b29411ad9ca06b4b4ff93054f0166',TRUE
 FROM projects WHERE kode='SIRIKAP' ON CONFLICT (project_id,versi) DO NOTHING;
 INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)
 SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
@@ -408,20 +409,21 @@ SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
   body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; line-height: 1.18; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .page { break-after: page; page-break-after: always; }
   .page:last-child { break-after: auto; page-break-after: auto; }
+  .page-1 { padding-top: 3mm; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .header-table { margin-bottom: 11mm; }
-  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; }
+  .header-table td { border: .6pt solid #222; padding: .7mm 1.5mm; text-align: center; vertical-align: middle; line-height: 1.1; font-size: 9pt; }
   .header-left { width: 80%; font-weight: 700; }
   .header-left.header-title { font-weight: 400; font-size: 10pt; }
   .header-right { width: 20%; font-weight: 700; }
   .page-results .header-table { margin-bottom: 7mm; }
-  .identity-table td { border: .55pt solid #222; padding: 1.55mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
+  .identity-table td { border: .55pt solid #222; padding: 1.75mm 1.45mm; vertical-align: middle; overflow-wrap: anywhere; }
   .identity-table .section-label { font-weight: 700; background: #dedede; padding: 1.1mm 1.5mm; }
   .identity-table .field-label { white-space: nowrap; }
   .identity-table .approval-text { line-height: 1.3; }
   .signature-table { margin-top: -0.55pt; }
   .signature-table td { border: .55pt solid #222; width: 50%; vertical-align: top; padding: 2.3mm 2mm; text-align: center; }
-  .signature-table .signature-space { height: 18mm; }
+  .signature-table .signature-space { height: 23mm; }
   .signature-table .signature-name { font-weight: 500; }
   .signature-table .signature-meta { font-size: 8pt; }
   .signature-table .signature-warning { color: #6b7280; font-size: 7pt; padding-top: 1mm; }
@@ -538,5 +540,5 @@ SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
 
 </body>
 </html>
-','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'15f0196d1734a3290eed11d1ce5710c40faf320888a55bcfda478ae88f98210e',TRUE
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if @root.penerbit.dinas}}{{@root.penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if @root.penerbit.bidang}}{{@root.penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if @root.project.form_title}}{{@root.project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{@root.project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'ebbf088dda5152fcbc8a93de7cdae203326b29411ad9ca06b4b4ff93054f0166',TRUE
 FROM projects WHERE kode='SIMPEG' ON CONFLICT (project_id,versi) DO NOTHING;
