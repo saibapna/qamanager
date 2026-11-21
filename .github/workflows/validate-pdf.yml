@@ -1,5 +1,5 @@
 name: Validate PDF
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -12,13 +12,47 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils fonts-liberation libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64
       - run: npm install --no-audit --no-fund
       - run: pip install -r requirements.txt
-      - run: node src/generate.js data/sample-sirikap.json output/hasil-ulo.pdf
-      - run: pdfinfo output/hasil-ulo.pdf | grep Pages
-      - run: |
+      - name: Generate 71-item ULO reference candidate
+        run: node src/generate.js data/sample-sirikap.json output/hasil-ulo.pdf
+      - name: Enforce exactly five output pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          pages="$(pdfinfo output/hasil-ulo.pdf | awk '/^Pages:/ {print $2}')"
+          echo "Generated ULO pages: $pages"
+          test "$pages" = 5
+      - name: Positive and negative five-page visual SSIM regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/create-synthetic-pdf-pairs.mjs
+          folder=output/pdf-comparator-fixtures
+          python scripts/validate.py --dpi 100 "$folder/synthetic-reference.pdf" "$folder/synthetic-identical.pdf"
+          for invalid in synthetic-visual-change synthetic-text-change synthetic-truncated; do
+            if python scripts/validate.py --dpi 100 "$folder/synthetic-reference.pdf" "$folder/$invalid.pdf"; then
+              echo "::error::Visual comparator accepted invalid $invalid PDF"
+              exit 1
+            fi
+            echo "Correctly rejected $invalid"
+          done
+      - name: Report official baseline acceptance separately
+        shell: bash
+        run: |
+          set -euo pipefail
           if [ -f fixtures/lampiran.pdf ]; then
             python scripts/validate.py fixtures/lampiran.pdf output/hasil-ulo.pdf
+            echo "Official fixture comparison passed." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP pixel-perfect comparison: fixtures/lampiran.pdf not included"
+            echo "::warning title=Formal 5-page PDF baseline missing::Algorithm regression passed, but official 1:1 comparison is UNVERIFIED."
+            echo "OFFICIAL PDF ACCEPTANCE: UNVERIFIED - fixtures/lampiran.pdf not provided." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Require official baseline on manual acceptance-gate run
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if [ ! -f fixtures/lampiran.pdf ]; then
+            echo "::error::Official 5-page fixture must be provided through an authorized private delivery path before signing off P2.05."
+            exit 1
           fi
       - uses: actions/upload-artifact@v4
         if: always()
