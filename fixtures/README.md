@@ -1,6 +1,6 @@
 # Baseline PDF resmi dan audit visual
 
-**Status saat ini: belum ada lampiran PDF resmi yang disetujui.** Pengujian sintetik bukan bukti bahwa template cocok dengan lampiran resmi.
+**Status: tiga dokumen referensi BA/UAT dan ULO telah diterima dari pemilik proses, tetapi belum ada persetujuan final sebagai baseline regresi visual.** PDF sumber memuat tanda tangan dan data pribadi, sehingga tidak dimasukkan ke repo publik. Lihat [manifest referensi dan checksum](official-reference-manifest.md). Pengujian sintetik bukan bukti bahwa template identik dengan PDF resmi.
 
 ## Gate P2.05
 
@@ -24,6 +24,6 @@ Workflow normal `Validate PDF` membuktikan algoritma SSIM dan heatmap bekerja me
 
 ## Bukti yang belum tersedia
 
-- Dokumen baseline lima halaman dari otoritas pemilik proses.
+- Persetujuan tertulis bahwa PDF SIRIKAP lima halaman yang diunggah adalah baseline acuan yang resmi, konsisten, dan dapat digunakan untuk pengukuran 1:1.
 - Persetujuan formal atas kualitas dan isi template.
 - Hasil perbandingan visual untuk PDF produksi dengan data 71 test case aktual.
