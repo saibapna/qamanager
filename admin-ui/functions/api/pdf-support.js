@@ -167,11 +167,11 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     let render;
     const renderStartedAt = Date.now();
     try { render = await c.env.BROWSER.quickAction('pdf', { html }); }
-    const renderMs = Date.now() - renderStartedAt;
     catch (error) {
       console.error('qamanager_pdf_renderer', error?.message || 'Browser Run error');
       fail(503, 'Browser Run tidak dapat menghasilkan PDF. Periksa kuota Browser Run');
     }
+    const renderMs = Date.now() - renderStartedAt;
     if (!render || typeof render.arrayBuffer !== 'function' || !render.ok) {
       console.error('qamanager_pdf_renderer_response', render?.status || 'invalid response');
       fail(502, 'Browser Run gagal mengembalikan PDF');
