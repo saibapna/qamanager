@@ -6,7 +6,9 @@
   "dokumen": {
     "jenis": "UAT",
     "totalPages": 2,
-    "signatureNotice": "Contoh sintetis, belum disahkan."
+    "signatureNotice": "Contoh sintetis, belum disahkan.",
+    "showSummaryFirst": false,
+    "showSummaryFinal": false
   },
   "project": {
     "instansi": "INSTANSI CONTOH",
