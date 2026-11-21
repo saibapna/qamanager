@@ -89,6 +89,15 @@ export function assertBulkItemTransition(previous, proposed, defect) {
   }
 }
 
+/** Prevent committing an output rendered from a stale UAT result or status. */
+export function isPdfSnapshotCurrent(sourceRevision, sourceStatus, current) {
+  const source = Number(sourceRevision);
+  const actual = Number(current?.revision);
+  return Number.isSafeInteger(source) && source >= 1 &&
+    Number.isSafeInteger(actual) && actual === source &&
+    String(current?.status) === String(sourceStatus);
+}
+
 export function hashCloudflarePassword(password) {
   if (typeof password !== 'string' || password.length < 16 || password.length > 128) {
     throw new Error('Password harus 16–128 karakter');
