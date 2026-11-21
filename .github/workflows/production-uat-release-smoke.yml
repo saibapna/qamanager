@@ -5,10 +5,16 @@ on:
     paths:
       - '.github/workflows/production-uat-release-smoke.yml'
   workflow_dispatch: {}
+  workflow_run:
+    workflows: ['Build Cloudflare Hono Worker']
+    types: [completed]
+  schedule:
+    - cron: '17 2 * * *'
 permissions:
   contents: read
 jobs:
   smoke:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -25,7 +31,7 @@ jobs:
             if [ "$code" != "$expected" ]; then head -c 700 /tmp/response.txt; echo; return 1; fi
           }
           check GET /api/status 200
-          jq -e '.ready == true and .pdf == "browser-run" and .pdf_storage == "supabase_private_bytea"' /tmp/response.txt
+          jq -e '.ready == true and .pdf == "browser-run" and .pdf_storage == "supabase_private_storage"' /tmp/response.txt
           check GET /api/health 200
           jq -e '.ok == true and .database == "connected"' /tmp/response.txt
           check GET /api/projects 401
@@ -37,8 +43,13 @@ jobs:
           check GET /api/sesi/1/defects 401
           check GET /api/sesi/1/approvals 401
           check GET /api/sesi/1/items/1/evidence 401
+          check GET /api/sesi/1/items/1/evidence/1/download 401
+          check GET /api/sesi/1/outputs/1/download 401
+          check GET /api/templates/1/fixtures/1/download 401
+          check GET /api/projects/1/storage-usage 401
+          check GET /api/dashboard/portfolio 401
           check GET /api/templates/1/fixtures 401
           check GET /api/auth/me 401
           check GET /login 200
           grep -iq '<!doctype html>' /tmp/response.txt
-          echo 'Production UAT unauthenticated smoke PASSED'
+          echo 'Production UAT private-storage readiness and anonymous-access gate PASSED'
