@@ -1,6 +1,6 @@
 import { api } from './client';
 export interface Project { id: number; kode: string; nama: string; instansi: string; bidang?: string; aktif: boolean; }
-export interface PortfolioRow { id: number; kode: string; nama: string; instansi: string; total_sessions: number; signed_sessions: number; total_items: number; pass_items: number; fail_items: number; pending_items: number; open_defects: number; }
+export interface PortfolioRow { id: number; kode: string; nama: string; instansi: string; total_sessions: number; signed_sessions: number; total_items: number; pass_items: number; fail_items: number; pending_items: number; open_defects: number; awaiting_witness: number; awaiting_approver: number; rejected_decisions: number; }
 export const projectsApi = {
   list: () => api.get<Project[]>('/projects').then(r => r.data),
   portfolio: () => api.get<PortfolioRow[]>('/dashboard/portfolio').then(r => r.data),
