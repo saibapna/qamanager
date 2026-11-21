@@ -57,6 +57,13 @@ jobs:
             echo "anonymous $route HTTP $unauthorized"
             test "$unauthorized" = "401"
           done
+          # All audit methods are protected at the authentication boundary.
+          # Audit mutations are intentionally absent from the public route table.
+          for method in GET POST PATCH DELETE; do
+            code="$(curl --max-time 30 --silent --show-error -o /tmp/qamanager-audit-protected.json -w '%{http_code}' -X "$method" "$base/api/projects/1/audit")"
+            echo "anonymous $method audit HTTP $code"
+            test "$code" = "401"
+          done
           echo "Production smoke checks passed"
       - name: Report failed production API smoke in GitHub Issues
         if: failure()
