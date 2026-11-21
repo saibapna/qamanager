@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'https://qamanager.saipulbahri-it.workers.dev',
+    baseURL: process.env.QA_BROWSER_BASE_URL || 'https://qamanager.saipulbahri-it.workers.dev',
     headless: true,
     trace: 'retain-on-failure',
   }
