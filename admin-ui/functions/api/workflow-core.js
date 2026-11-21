@@ -1,4 +1,4 @@
-import { randomBytes, pbkdf2Sync, createHash } from 'node:crypto';
+import { randomBytes, pbkdf2Sync, createHash, createHmac } from 'node:crypto';
 
 // These invariants are shared by the API routes and executable regression tests.
 export const UAT_STATUSES = Object.freeze(['PASS','FAIL','BELUM']);
@@ -136,4 +136,19 @@ export async function runAtomic(query, work) {
     try { await query('ROLLBACK'); } catch { /* preserve the original failure */ }
     throw error;
   }
+}
+
+
+/**
+ * Cross-IP account throttle key: deterministic per account, but keyed so a
+ * database breach does not reveal unhashed email addresses by guessing SHA256.
+ * Keep the key in a server-only Worker secret; never use user-editable claims.
+ */
+export function accountThrottleKey(email, secret) {
+  if (typeof email !== 'string' || !email.trim() || typeof secret !== 'string' || !secret) {
+    throw new Error('Cannot compute authentication throttle key');
+  }
+  return createHmac('sha256', secret)
+    .update('qamanager:login:' + email.trim().toLowerCase())
+    .digest('hex');
 }
