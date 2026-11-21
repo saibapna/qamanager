@@ -32,8 +32,9 @@ export function Layout() {
   if(!ready)return <div className="p-8" role="status">Memeriksa sesi...</div>;
   if(!user)return <Navigate to="/login" replace />;
   return <div className="flex flex-col md:flex-row min-h-screen">
+    <a href="#qa-main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-white focus:px-4 focus:py-2 focus:text-slate-900 focus:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700">Lewati navigasi menuju konten utama</a>
     <Sidebar/>
-    <main className="flex-1 md:ml-64 min-w-0 p-4 md:p-6"><Outlet/></main>
+    <main id="qa-main-content" tabIndex={-1} className="flex-1 md:ml-64 min-w-0 scroll-mt-16 p-4 md:p-6"><Outlet/></main>
     <ToastContainer/>
   </div>;
 }
