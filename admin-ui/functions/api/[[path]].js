@@ -6,7 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
-import { assertCanonicalItems, checkFinalization, runAtomic, accountThrottleKey } from './workflow-core.js';
+import { assertCanonicalItems, checkFinalization, assertBulkItemTransition, runAtomic, accountThrottleKey } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
@@ -415,10 +415,13 @@ app.put('/api/sesi/:sesiId/items',async c=>{
     const previous=(await q(c,'SELECT id,no,status,hasil FROM ulo_item WHERE sesi_id=$1 FOR UPDATE',[sid])).rows;
     if(previous.length!==plan.length)fail(409,'Item sesi belum lengkap; butuh rekonsiliasi admin');
     const old=new Map(previous.map(x=>[String(x.no),x]));
+    const defectRows=(await q(c,'SELECT item_id,status FROM ulo_defects WHERE sesi_id=$1 FOR UPDATE',[sid])).rows;
+    const defectsByItemId=new Map(defectRows.map(x=>[String(x.item_id),x]));
     for(const item of items){
       const prior=old.get(String(item.no));
       if(!prior)fail(409,'Test case sesi tidak sesuai katalog');
-      if(prior.status==='FAIL'&&item.status==='PASS')fail(409,'Hasil FAIL harus diperbaiki melalui proses retest defect');
+      try{assertBulkItemTransition(prior,item,defectsByItemId.get(String(prior.id)));}
+      catch(e){fail(409,e.message);}
       if(prior.status!==item.status||String(prior.hasil||'')!==String(item.hasil||'')){
         await q(c,'UPDATE ulo_item SET status=$1,hasil=$2 WHERE id=$3',[item.status,item.hasil||null,prior.id]);
         await q(c,'INSERT INTO ulo_item_events(project_id,sesi_id,item_no,old_status,new_status,old_hasil,new_hasil,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[pid,sid,item.no,prior.status,item.status,prior.hasil,item.hasil||null,c.get('uid')]);
