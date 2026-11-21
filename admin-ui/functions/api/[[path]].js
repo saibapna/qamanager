@@ -6,6 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
+import { installTemplateSharingRoutes } from './template-sharing.js';
 import {storageEnabled} from './private-storage.js';
 import { assertCanonicalItems, checkFinalization, assertBulkItemTransition, runAtomic, accountThrottleKey } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
@@ -278,6 +279,7 @@ app.delete('/api/projects/:projectId',async c=>{
   await publishLive(c,'PROJECT_ARCHIVED');
   return c.body(null,204);
 });
+installTemplateSharingRoutes(app, { q, first, guard, id, fail, audit, atomic, publishLive, json });
 app.get('/api/projects/:projectId/templates',async c=>{const pid=await guard(c,'projectId');return c.json((await q(c,'SELECT id,versi,nama,published,checksum,created_at FROM templates WHERE project_id=$1 ORDER BY created_at DESC',[pid])).rows);});
 app.post('/api/projects/:projectId/templates',async c=>{
   const pid=await guard(c,'projectId',['ADMIN']),d=await json(c);

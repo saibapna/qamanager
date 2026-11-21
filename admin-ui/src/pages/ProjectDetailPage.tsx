@@ -42,6 +42,24 @@ function SesiList({app,templateId,canEdit}:{app:Aplikasi;templateId:number;canEd
 export function ProjectDetailPage(){
   const {id}=useParams<{id:string}>();const pid=Number(id);const toast=useToast();const qc=useQueryClient();
   const canEdit=useAuth(s=>s.hasRole(pid,'ADMIN','TESTER'));
+  const canManageTemplates=useAuth(s=>s.hasRole(pid,'ADMIN'));
+  const navigate=useNavigate();
+  const [sourceTemplateId,setSourceTemplateId]=useState(0);
+  const [importVersion,setImportVersion]=useState('');
+  const {data:sharedTemplates=[]}=useQuery({
+    queryKey:['shared-templates',pid],
+    queryFn:()=>templatesApi.sharedCatalog(pid),
+    enabled:canManageTemplates
+  });
+  const importTemplate=useMutation({
+    mutationFn:()=>templatesApi.importShared(pid,sourceTemplateId,importVersion.trim()),
+    onSuccess:(template)=>{
+      qc.invalidateQueries({queryKey:['templates',pid]});
+      toast.push('success','Salinan template DRAFT dibuat; periksa kategori dan page map sebelum publish');
+      navigate(`/templates/${template.id}`);
+    },
+    onError:(e:Error)=>toast.push('error',e.message)
+  });
   const [open,setOpen]=useState(false);const [newApp,setNewApp]=useState({nama_singkat:'',nama_panjang:'',url:''});
   const {data:project}=useQuery({queryKey:['project',pid],queryFn:()=>projectsApi.get(pid)});
   const {data:templates=[]}=useQuery({queryKey:['templates',pid],queryFn:()=>templatesApi.listByProject(pid),refetchInterval:15000});
@@ -60,6 +78,40 @@ export function ProjectDetailPage(){
     <div className="bg-white rounded-xl border divide-y mb-8">{templates.map(t=><Link key={t.id} to={`/templates/${t.id}`} className="p-4 flex items-center justify-between hover:bg-slate-50">
       <div><p className="font-medium text-sm">{t.nama}</p><p className="text-xs text-slate-500">v{t.versi}</p></div>
       <Badge variant={t.published?'success':'warning'}>{t.published?'Published':'Draft'}</Badge></Link>)}</div>
+    {canManageTemplates && <section className="mb-8 rounded-xl border bg-white p-4" aria-label="Katalog Template Bersama">
+      <h3 className="mb-2 font-semibold">Katalog Template Bersama</h3>
+      <p className="mb-3 text-sm text-slate-600">
+        Gunakan template published yang dibagikan oleh administrator proyek lain.
+        Sistem hanya menyalin layout dan konfigurasi menjadi DRAFT milik proyek ini,
+        tanpa hasil pengujian, bukti, fixture PDF atau tanda tangan.
+      </p>
+      {sharedTemplates.length===0 ? <p className="text-sm text-slate-500">Belum ada template bersama yang tersedia.</p> :
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-1 text-sm">
+            <span className="block font-medium">Pilih template bersama</span>
+            <select aria-label="Template yang akan disalin" className={inputCls}
+              value={sourceTemplateId}
+              onChange={e=>{const id=Number(e.target.value);setSourceTemplateId(id);setImportVersion(id?'s'+id:'');}}>
+              <option value={0}>Pilih template...</option>
+              {sharedTemplates.map(t=><option key={t.id} value={t.id}>
+                {t.nama} · {t.source_project_code} · v{t.versi}
+              </option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="block font-medium">Versi salinan</span>
+            <input aria-label="Versi template baru" className={inputCls} maxLength={20}
+              placeholder="Contoh: 2.0.0" value={importVersion}
+              onChange={e=>setImportVersion(e.target.value)}/>
+          </label>
+          <button type="button" disabled={!sourceTemplateId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,19}$/.test(importVersion) || importTemplate.isPending}
+            className="rounded bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            onClick={()=>importTemplate.mutate()}>
+            {importTemplate.isPending ? 'Menyalin...' : 'Salin sebagai DRAFT'}
+          </button>
+        </div>}
+      <p className="mt-2 text-xs text-slate-500">Periksa kategori dan pembagian halaman terhadap test plan proyek ini sebelum menerbitkan versi salinan.</p>
+    </section>}
     <div className="flex justify-between items-center mb-3"><h3 className="font-semibold">Aplikasi & Sesi ULO</h3>{canEdit&&<button onClick={()=>setOpen(true)} className="flex items-center gap-2 px-3 py-2 text-sm bg-brand-600 text-white rounded"><Plus size={16}/> Aplikasi Baru</button>}</div>
     <div className="grid md:grid-cols-2 gap-4">{apps.map(app=><SesiList key={app.id} app={app} templateId={published?.id||0} canEdit={canEdit}/>)}</div>
     <Modal title="Aplikasi Baru" open={open} onClose={()=>setOpen(false)}><FormField label="Nama singkat" required><input value={newApp.nama_singkat} onChange={e=>setNewApp({...newApp,nama_singkat:e.target.value})} className={inputCls}/></FormField>
