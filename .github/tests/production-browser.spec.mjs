@@ -28,3 +28,40 @@ test('login screen fits narrow mobile viewport without horizontal scroll', async
   const dims=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:window.innerWidth}));
   expect(dims.scroll).toBeLessThanOrEqual(dims.viewport+1);
 });
+
+
+test('login controls can be operated by keyboard alone', async ({page}) => {
+  await page.goto('/login', {waitUntil:'domcontentloaded'});
+  const password=page.getByLabel('Password',{exact:true});
+  await password.focus();
+  await page.keyboard.press('Tab');
+  const toggle=page.getByRole('button',{name:'Tampilkan password'});
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(password).toHaveAttribute('type','text');
+});
+
+test('mocked signed-in layout provides a visible keyboard skip link to main content', async ({page}) => {
+  // Synthetic browser-only responses: no QA credentials, sessions, or mutations.
+  await page.route('**/api/auth/me', route => route.fulfill({
+    status:200,contentType:'application/json',
+    body:JSON.stringify({id:9999,nama:'Accessibility Tester',email:'synthetic@example.invalid',is_platform_admin:false,projects:[]})
+  }));
+  await page.route('**/api/projects', route => route.fulfill({
+    status:200,contentType:'application/json',body:'[]'
+  }));
+  await page.route('**/api/dashboard/portfolio', route => route.fulfill({
+    status:200,contentType:'application/json',body:'[]'
+  }));
+  await page.setViewportSize({width:375,height:812});
+  await page.goto('/projects', {waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('main')).toBeVisible();
+  const skip=page.getByRole('link',{name:'Lewati navigasi menuju konten utama'});
+  await page.keyboard.press('Tab');
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#qa-main-content')).toBeFocused();
+  const dims=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:window.innerWidth}));
+  expect(dims.scroll).toBeLessThanOrEqual(dims.viewport+1);
+});

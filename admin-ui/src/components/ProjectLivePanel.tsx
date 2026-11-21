@@ -13,11 +13,11 @@ export function ProjectLivePanel({ projectId }: { projectId: number }) {
   return <div className="space-y-4 mb-7">
     <div className="flex items-center gap-2 text-xs text-slate-600">
       <span className={connected ? 'w-2 h-2 rounded-full bg-emerald-500' : 'w-2 h-2 rounded-full bg-amber-500'} />
-      {connected ? 'Real-time tersambung' : 'Koneksi real-time terputus; sinkronisasi 15 detik'}
+      <span role="status" aria-live="polite">{connected ? 'Real-time tersambung' : 'Koneksi real-time terputus; sinkronisasi 15 detik'}</span>
       {connected && <span>· {online.length} tester online</span>}
       {lastChange && <span>· Terakhir: {lastChange.action}</span>}
     </div>
-    <div className="grid grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {Object.entries({ Total: summary.total, PASS: summary.lulus, FAIL: summary.gagal, BELUM: summary.belum }).map(([k, value]) =>
         <div key={k} className="border rounded-xl bg-white p-3"><p className="text-xs text-slate-500">{k}</p><p className="font-bold text-xl">{value}</p></div>)}
     </div>
