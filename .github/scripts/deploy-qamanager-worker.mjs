@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const workerName = 'qamanager';
+const configuredR2Bucket = (process.env.QAMANAGER_R2_BUCKET || '').trim();
 const hostname = 'https://qamanager.saipulbahri-it.workers.dev';
 const expected = new Map([
   ['BROWSER', 'browser'],
@@ -14,6 +15,10 @@ const expected = new Map([
 
 if (!/^[0-9a-f]{32}$/i.test(accountId || '') || !apiToken) {
   throw new Error('Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN as GitHub Actions secrets.');
+}
+
+if (configuredR2Bucket && !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(configuredR2Bucket)) {
+  throw new Error('QAMANAGER_R2_BUCKET must be a valid Cloudflare R2 bucket name (3-64 lowercase characters).');
 }
 
 const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`;
@@ -29,18 +34,22 @@ async function cloudflare(url, options = {}) {
   return data.result;
 }
 
-function assertBindings(settings, phase, requireRealtime = false) {
+function assertBindings(settings, phase, requireRealtime = false, requireR2 = false) {
   const bindings = settings?.bindings;
   assert.ok(Array.isArray(bindings), `${phase}: cannot verify Worker bindings`);
   const actual = new Map(bindings.map(b => [b.name, b.type]));
-  assert.equal(actual.size, expected.size + (requireRealtime ? 1 : 0), `${phase}: unexpected binding set; update deployment safeguards first`);
-  if(requireRealtime)assert.equal(actual.get('PROJECT_LIVE'),'durable_object_namespace',`${phase}: missing ProjectLive binding`);
-  for (const [name, type] of expected) {
+  const required = new Map(expected);
+  if (requireRealtime) required.set('PROJECT_LIVE', 'durable_object_namespace');
+  if (requireR2) required.set('R2_FILES', 'r2_bucket');
+  assert.equal(actual.size, required.size, `${phase}: unexpected binding set; update deployment safeguards first`);
+  for (const [name, type] of required) {
     assert.equal(actual.get(name), type, `${phase}: missing or changed binding ${name}`);
   }
   const hyperdrive = bindings.find(b => b.name === 'HYPERDRIVE');
   assert.ok(hyperdrive?.id, `${phase}: Hyperdrive ID unavailable`);
-  return hyperdrive.id;
+  const r2 = bindings.find(b => b.name === 'R2_FILES');
+  if (requireR2) assert.ok(r2?.bucket_name, `${phase}: R2 bucket name unavailable`);
+  return { hyperdriveId: hyperdrive.id, r2Bucket: r2?.bucket_name || null };
 }
 
 const previous = await cloudflare(`${apiBase}/deployments`);
@@ -51,19 +60,31 @@ assert.equal(previousVersions.reduce((sum, version) => sum + version.percentage,
   'Previous deployment traffic percentages are invalid');
 
 const before = await cloudflare(`${apiBase}/settings`);
-const existingRealtime=before.bindings?.some(b=>b.name==='PROJECT_LIVE');
-const hyperdriveId = assertBindings(before, 'preflight',existingRealtime);
+const existingRealtime = before.bindings?.some(b => b.name === 'PROJECT_LIVE');
+const existingR2 = before.bindings?.find(b => b.name === 'R2_FILES');
+if (existingR2 && existingR2.type !== 'r2_bucket') {
+  throw new Error('R2_FILES already exists but is not an R2 binding');
+}
+if (configuredR2Bucket && existingR2 && existingR2.bucket_name !== configuredR2Bucket) {
+  throw new Error('R2_FILES bucket mismatch; refusing to rebind an existing production resource');
+}
+const expectedR2Bucket = configuredR2Bucket || existingR2?.bucket_name || null;
+const { hyperdriveId } = assertBindings(before, 'preflight', existingRealtime, Boolean(existingR2));
 assert.equal(before.compatibility_date, '2026-11-20', 'compatibility date changed; review before auto-deploy');
 assert.ok(before.compatibility_flags?.includes('nodejs_compat'), 'nodejs_compat missing');
 
 const code = await readFile(new URL('../../admin-ui/worker-dist/qamanager-worker.mjs', import.meta.url));
+const addedBindings = [
+  ...(!existingRealtime ? [{ name: 'PROJECT_LIVE', type: 'durable_object_namespace', class_name: 'ProjectLive' }] : []),
+  ...(configuredR2Bucket && !existingR2 ? [{ name: 'R2_FILES', type: 'r2_bucket', bucket_name: configuredR2Bucket }] : []),
+];
 const metadata = {
   main_module: 'qamanager-worker.mjs',
-  keep_bindings: ['browser', 'hyperdrive', 'secret_text', ...(existingRealtime?['durable_object_namespace']:[])],
-  ...(!existingRealtime?{
-    bindings:[{name:'PROJECT_LIVE',type:'durable_object_namespace',class_name:'ProjectLive'}],
-    migrations:{new_tag:'qamanager-realtime-v1',new_sqlite_classes:['ProjectLive']},
-  }:{}),
+  keep_bindings: ['browser', 'hyperdrive', 'secret_text',
+    ...(existingRealtime ? ['durable_object_namespace'] : []),
+    ...(existingR2 ? ['r2_bucket'] : [])],
+  ...(addedBindings.length ? { bindings: addedBindings } : {}),
+  ...(!existingRealtime ? { migrations: { new_tag: 'qamanager-realtime-v1', new_sqlite_classes: ['ProjectLive'] } } : {}),
   compatibility_date: before.compatibility_date,
   compatibility_flags: before.compatibility_flags,
   observability: before.observability,
@@ -79,7 +100,9 @@ try {
   uploadSucceeded = true;
 
   const after = await cloudflare(`${apiBase}/settings`);
-  assert.equal(assertBindings(after, 'post-deploy',true), hyperdriveId, 'Hyperdrive binding changed');
+  const verified = assertBindings(after, 'post-deploy', true, Boolean(expectedR2Bucket));
+  assert.equal(verified.hyperdriveId, hyperdriveId, 'Hyperdrive binding changed');
+  if (expectedR2Bucket) assert.equal(verified.r2Bucket, expectedR2Bucket, 'R2 bucket binding changed');
 
   async function smoke(path, expectedType) {
     const response = await fetch(hostname + path, { headers: { 'Cache-Control': 'no-cache' } });
@@ -100,7 +123,8 @@ try {
   const healthData = await health.json();
   assert.equal(healthData.ok, true, 'Database health check failed');
   assert.equal(healthData.database, 'connected', 'Hyperdrive is not connected');
-  console.log('Deploy PASS: /projects is HTML; /api/status ready; /api/health database connected; bindings preserved.');
+  console.log('Deploy PASS: /projects is HTML; /api/status ready; /api/health database connected; bindings preserved.' +
+    (expectedR2Bucket ? ' R2_FILES=' + expectedR2Bucket + ' (storage migration NOT active).' : ''));
 } catch (error) {
   console.error('Deploy verification failed:', error instanceof Error ? error.message : String(error));
   if (uploadSucceeded) {
