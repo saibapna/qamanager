@@ -247,6 +247,73 @@ paths:
       responses:
         '201':
           description: OK
+  /projects/{projectId}/shared-templates:
+    get:
+      summary: Katalog template published yang secara eksplisit dibagikan proyek lain
+      description: Hanya ADMIN proyek tujuan. Tidak menampilkan HTML template, fixture, hasil sesi, evidence atau output PDF.
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Metadata template bersama, termasuk asal dan checksum
+        '403':
+          description: Bukan ADMIN proyek tujuan
+  /projects/{projectId}/templates/import:
+    post:
+      summary: Salin template bersama sebagai DRAFT independen
+      description: >-
+        Hanya ADMIN tujuan; sumber harus masih published, aktif dan dibagikan.
+        Tidak mengimpor fixture, hasil ULO/UAT, evidence, atau tanda tangan.
+        Periksa page_map dan kategori_map sebelum publish salinan.
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_template_id, versi]
+              properties:
+                source_template_id: {type: integer, minimum: 1}
+                versi: {type: string, minLength: 1, maxLength: 20, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,19}$'}
+      responses:
+        '201':
+          description: Salinan template DRAFT milik proyek tujuan
+        '403':
+          description: Bukan ADMIN proyek tujuan
+        '404':
+          description: Template tidak dibagikan atau tidak tersedia
+        '409':
+          description: Versi telah digunakan oleh template lain di proyek tujuan
+  /templates/{templateId}/share:
+    parameters:
+    - name: templateId
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    get:
+      summary: Status berbagi template milik proyek yang dapat diakses
+      responses:
+        '200': {description: shared boolean dan timestamp}
+    post:
+      summary: ADMIN proyek asal membagikan template published ke katalog
+      responses:
+        '200': {description: Template tersedia dalam katalog}
+        '403': {description: Bukan ADMIN proyek asal}
+        '409': {description: Template belum published}
+    delete:
+      summary: ADMIN proyek asal mencabut berbagi untuk impor berikutnya
+      description: Salinan yang telah diimpor proyek lain tidak dihapus atau diubah.
+      responses:
+        '200': {description: Berbagi dinonaktifkan}
+        '403': {description: Bukan ADMIN proyek asal}
   /templates/{templateId}:
     parameters:
     - name: templateId
