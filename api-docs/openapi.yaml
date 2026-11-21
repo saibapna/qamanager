@@ -98,7 +98,7 @@ components:
         limit_bytes: {type: integer, format: int64}
     PortfolioRow:
       type: object
-      required: [id, kode, nama, instansi, total_sessions, signed_sessions, total_items, pass_items, fail_items, pending_items, open_defects]
+      required: [id, kode, nama, instansi, total_sessions, signed_sessions, total_items, pass_items, fail_items, pending_items, open_defects, awaiting_witness, awaiting_approver, rejected_decisions]
       properties:
         id: {type: integer}
         kode: {type: string}
@@ -111,6 +111,9 @@ components:
         fail_items: {type: integer}
         pending_items: {type: integer}
         open_defects: {type: integer}
+        awaiting_witness: {type: integer, description: FINAL terkini belum memiliki approval WITNESS pada revisi aktif}
+        awaiting_approver: {type: integer, description: WITNESS menyetujui tetapi APPROVER belum memutuskan pada revisi aktif}
+        rejected_decisions: {type: integer, description: Total keputusan ditolak sepanjang riwayat project}
     Template:
       type: object
       properties:
@@ -564,7 +567,7 @@ paths:
         '403': {description: Bukan ADMIN atau AUDITOR project}
   /projects/{projectId}/dashboard:
     get:
-      summary: Dashboard jumlah sesi, status item, defect (scoped project)
+      summary: Dashboard sesi, item, defect dan persetujuan WITNESS/APPROVER pada revisi aktif (scoped project)
       parameters:
       - name: projectId
         in: path
