@@ -48,8 +48,9 @@ test('P0.09 DB-backed Hono cross-project authorization, nested IDs, session revo
       'CREATE TABLE ulo_uat.ulo_sesi (id bigint PRIMARY KEY, project_id bigint, aplikasi_id bigint, template_id bigint, status text, revision int, finalized_at timestamptz)',
       'CREATE TABLE ulo_uat.test_plan_items (project_id bigint, no text, kategori text, kebutuhan text, urutan int)',
       'CREATE TABLE ulo_uat.ulo_item (id bigint PRIMARY KEY, sesi_id bigint, no text, kategori text, kebutuhan text, hasil text, status text, urutan int)',
-      'CREATE TABLE ulo_uat.ulo_defects (id bigint PRIMARY KEY, project_id bigint, sesi_id bigint, item_id bigint, status text, resolution_note text)',
+      'CREATE TABLE ulo_uat.ulo_defects (id bigint PRIMARY KEY, project_id bigint, sesi_id bigint, item_id bigint, status text, resolution_note text, updated_at timestamptz)',
       'CREATE TABLE ulo_uat.ulo_retests (id bigint PRIMARY KEY, defect_id bigint, status text)',
+      'CREATE TABLE ulo_uat.ulo_approvals (id bigserial PRIMARY KEY, project_id bigint, sesi_id bigint, revision int, role text, decision text, actor_id bigint, note text, occurred_at timestamptz DEFAULT now(), UNIQUE (sesi_id,revision,role))',
       'CREATE TABLE ulo_uat.ulo_evidence (id bigint PRIMARY KEY, project_id bigint, sesi_id bigint, item_id bigint, filename text, mime text, byte_size bigint, sha256 text, data bytea, storage_key text, deleted_at timestamptz, uploaded_by bigint, created_at timestamptz)',
       'CREATE TABLE ulo_uat.template_fixtures (id bigint PRIMARY KEY, template_id bigint, nama text, pdf_path text, sha256 text, pdf_data bytea, storage_key text, size_bytes bigint, page_count int, created_at timestamptz)',
       'CREATE TABLE ulo_uat.ulo_output (id bigint PRIMARY KEY, sesi_id bigint, versi int, pdf_path text, sha256 text, pdf_data bytea, storage_key text, size_bytes bigint, page_count int, generated_at timestamptz)',
@@ -64,7 +65,7 @@ test('P0.09 DB-backed Hono cross-project authorization, nested IDs, session revo
     const hash = hashCloudflarePassword(password);
     for (const [uid, projectId, role] of [
       [101, 1, 'ADMIN'], [102, 2, 'ADMIN'], [103, 1, 'AUDITOR'],
-      [104, 1, 'TESTER'], [105, 1, 'APPROVER'],
+      [104, 1, 'TESTER'], [105, 1, 'APPROVER'], [106, 1, 'WITNESS'],
     ]) {
       await db.query('INSERT INTO ulo_uat.users VALUES($1,$2,$3,$4,true,false)',
         [uid, 'user' + uid + '@integration.invalid', 'User ' + uid, hash]);
@@ -94,6 +95,8 @@ test('P0.09 DB-backed Hono cross-project authorization, nested IDs, session revo
     const other = await access(102, 2002);
     const auditor = await access(103, 2003);
     const tester = await access(104, 2004);
+    const approver = await access(105, 2005);
+    const witness = await access(106, 2006);
     const revoked = await access(101, 2999);
 
     await t.test('anonymous and revoked/expired sessions cannot access any project', async () => {
@@ -145,6 +148,39 @@ test('P0.09 DB-backed Hono cross-project authorization, nested IDs, session revo
       const res=await send('POST','/api/sesi/501/finalize',admin,{});
       assert.equal(res.status,422);
       assert.match((await res.json()).error,/wajib diuji/);
+    });
+    await t.test('P0.04: failed item requires APPROVER waiver before finalization', async () => {
+      await db.query("UPDATE ulo_uat.ulo_item SET status='FAIL',hasil='Defect reproduced' WHERE id=601");
+      await db.query("INSERT INTO ulo_uat.ulo_defects(id,project_id,sesi_id,item_id,status,updated_at) VALUES(1001,1,501,601,'OPEN',now())");
+      let res=await send('POST','/api/sesi/501/finalize',admin,{});
+      assert.equal(res.status,422,await res.clone().text());
+      res=await send('PATCH','/api/sesi/501/defects/1001',tester,{status:'WAIVED',resolution_note:'Risk reviewed'});
+      assert.equal(res.status,403,await res.clone().text());
+      res=await send('PATCH','/api/sesi/501/defects/1001',approver,{status:'WAIVED',resolution_note:'Risk accepted in UAT'});
+      assert.equal(res.status,200,await res.clone().text());
+      res=await send('POST','/api/sesi/501/finalize',admin,{});
+      assert.equal(res.status,200,await res.clone().text());
+      const result=await db.query('SELECT status FROM ulo_uat.ulo_item WHERE id=601');
+      assert.equal(result.rows[0].status,'FAIL','Waiver must not hide original FAIL');
+    });
+    await t.test('P1.07: SIGNED requires WITNESS then independent APPROVER',async()=>{
+      const testerDecision=await send('POST','/api/sesi/501/approvals',tester,{decision:'APPROVED'});
+      assert.equal(testerDecision.status,403);
+      const premature=await send('POST','/api/sesi/501/approvals',approver,{decision:'APPROVED'});
+      assert.equal(premature.status,409,await premature.clone().text());
+      const signedBefore=await db.query('SELECT status FROM ulo_uat.ulo_sesi WHERE id=501');
+      assert.equal(signedBefore.rows[0].status,'FINAL');
+      const witnessResponse=await send('POST','/api/sesi/501/approvals',witness,{decision:'APPROVED',note:'Witness checked'});
+      assert.equal(witnessResponse.status,201,await witnessResponse.clone().text());
+      const secondWitness=await send('POST','/api/sesi/501/approvals',witness,{decision:'APPROVED'});
+      assert.equal(secondWitness.status,409);
+      const approved=await send('POST','/api/sesi/501/approvals',approver,{decision:'APPROVED',note:'Final approved'});
+      assert.equal(approved.status,201,await approved.clone().text());
+      const signedAfter=await db.query('SELECT status FROM ulo_uat.ulo_sesi WHERE id=501');
+      assert.equal(signedAfter.rows[0].status,'SIGNED');
+      const ledger=await db.query('SELECT role,actor_id FROM ulo_uat.ulo_approvals WHERE sesi_id=501 ORDER BY id');
+      assert.deepEqual(ledger.rows.map(x=>x.role),['WITNESS','APPROVER']);
+      assert.notEqual(ledger.rows[0].actor_id,ledger.rows[1].actor_id);
     });
     await t.test('real login, server-session validation and logout revocation', async () => {
       const res=await send('POST','/api/auth/login',null,{
