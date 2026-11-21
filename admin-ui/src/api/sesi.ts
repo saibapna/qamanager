@@ -1,5 +1,5 @@
 import { api } from './client';
-export interface Sesi { id: number; project_id: number; status: string; revision?: number; finalized_at?: string | null; aplikasi_id: number; template_id: number; items?: Item[]; ringkasan?: Ringkasan; }
+export interface Sesi { id: number; project_id: number; status: string; revision?: number; finalized_at?: string | null; tanggal?: string | null; hari?: string | null; pukul?: string | null; created_at?: string | null; aplikasi_id: number; template_id: number; items?: Item[]; ringkasan?: Ringkasan; }
 export interface Item { id?: number; no: string; kategori: string; kebutuhan: string; hasil: string; status: 'PASS' | 'FAIL' | 'BELUM'; urutan: number; }
 export interface Ringkasan { total: number; lulus: number; gagal: number; belum: number; }
 export const sesiApi = {
