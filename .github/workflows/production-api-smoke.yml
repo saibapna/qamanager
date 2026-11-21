@@ -7,6 +7,10 @@ on:
     - cron: '*/30 * * * *'
 permissions:
   contents: read
+  issues: write
+concurrency:
+  group: qamanager-production-api-smoke
+  cancel-in-progress: false
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -54,3 +58,32 @@ jobs:
             test "$unauthorized" = "401"
           done
           echo "Production smoke checks passed"
+      - name: Report failed production API smoke in GitHub Issues
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title='[PRODUCTION INCIDENT] QA Manager API smoke failed'
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          query='.[] | select(.title == "[PRODUCTION INCIDENT] QA Manager API smoke failed") | .number'
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq "$query" | head -n 1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Production smoke failed again: $run_url. Inspect the failing endpoint and Cloudflare Worker logs before restoring service."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "Automated production API smoke failed. Run: $run_url. Check /api/status, /api/health, anonymous access controls, Cloudflare Worker logs and the most recent deployment. No secrets are included in this alert."
+          fi
+      - name: Mark a previous production API smoke incident recovered
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          query='.[] | select(.title == "[PRODUCTION INCIDENT] QA Manager API smoke failed") | .number'
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq "$query" | head -n 1)"
+          if [ -n "$existing" ]; then
+            run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --comment "Production API smoke recovered: $run_url. Check the incident history before closing the wider release gate."
+          fi
