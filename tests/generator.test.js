@@ -31,14 +31,27 @@ describe('HTML Structure', () => {
     $ = cheerio.load(html);
   });
   test('jumlah .page = 5', () => assert.equal($('.page').length, 5));
+  test('halaman hasil mengikuti urutan dokumen resmi 20/22/18/11',()=>{
+    assert.deepEqual($('.page-results').map((_,el)=>$(el).find('.result-table tbody tr:not(.section-row)').length).get(),[20,22,18,11]);
+  });
   test('header berisi 3 kode form', () => {
     const t = $('.header-table').first().text();
+    $('.header-table').each((_,table)=>{
+      assert.match($(table).text(),/S-APP\.2\.OBJ\.3/);
+      assert.match($(table).text(),/S-APP\.2\.OBJ\.4/);
+      assert.match($(table).text(),/S-APP\.2\.OBJ\.5/);
+    });
     assert.match(t, /S-APP\.2\.OBJ\.3/);
     assert.match(t, /S-APP\.2\.OBJ\.4/);
     assert.match(t, /S-APP\.2\.OBJ\.5/);
   });
-  test('footer memuat NIP', () => {
-    assert.match($('.footer-block').text(), /19880511 202521 1 045/);
+  test('blok pengesahan ada di halaman identitas dan hasil akhir, tanpa gambar tanda tangan', () => {
+    assert.equal($('.signature-table').length,2);
+    assert.match($('.signature-table').text(), /19880511 202521 1 045/);
+    assert.match($('.page-1 .summary-block').text(), /71 item diuji/);
+    assert.equal($('.result-table .status-fail').length,13);
+    assert.equal($('.result-table .status-pass').length,58);
+    assert.doesNotMatch($.html(), /data:image\/(png|jpeg)/);
   });
   test('tidak ada placeholder HBS tersisa', () => {
     assert.doesNotMatch($.html(), /\{\{[^}]+\}\}/);

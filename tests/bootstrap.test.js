@@ -21,4 +21,15 @@ test('Checksum template seed sesuai file HBS yang di-render',async()=>{
   const expected=crypto.createHash('sha256').update(layout+JSON.stringify({header})).digest('hex');
   const sql=await read('db/seed-templates.sql');
   assert.equal(sql.split(expected).length-1,2);
+  assert.equal((sql.match(/SELECT id,'1\.0\.0'/g)||[]).length,2);
+  assert.equal((sql.match(/SELECT id,'1\.1\.0'/g)||[]).length,2);
+  const v1=await read('templates/legacy/base-layout-v1.hbs');
+  const h1=await read('templates/legacy/header-v1.hbs');
+  const legacy=crypto.createHash('sha256').update(v1+JSON.stringify({header:h1})).digest('hex');
+  assert.equal(sql.split(legacy).length-1,2);
+  const migration=await read('db/migrations/20261121_official_ba_ulo_uat_v110.sql');
+  assert.equal(migration.split(expected).length-1,2);
+  assert.equal((migration.match(/SELECT id,'1\.1\.0'/g)||[]).length,2);
+  assert.doesNotMatch(migration,/SELECT id,'1\.0\.0'/);
+  assert.doesNotMatch(migration,/UPDATE\\s+templates/i);
 });

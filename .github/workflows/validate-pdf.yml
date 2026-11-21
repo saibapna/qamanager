@@ -23,6 +23,12 @@ jobs:
           pages="$(pdfinfo output/hasil-ulo.pdf | awk '/^Pages:/ {print $2}')"
           echo "Generated ULO pages: $pages"
           test "$pages" = 5
+      - name: Generate synthetic official BA UAT (2 pages) and ULO (3 pages)
+        run: |
+          node src/generate.js data/sample-ba-uat-2page.json output/sample-ba-uat.pdf
+          node src/generate.js data/sample-ba-ulo-3page.json output/sample-ba-ulo.pdf
+          test "$(pdfinfo output/sample-ba-uat.pdf | awk '/^Pages:/ {print $2}')" = 2
+          test "$(pdfinfo output/sample-ba-ulo.pdf | awk '/^Pages:/ {print $2}')" = 3
       - name: Positive and negative five-page visual SSIM regression
         shell: bash
         run: |

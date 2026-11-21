@@ -58,7 +58,18 @@ function buildHtml({ sesi, tpl, items, fail }) {
   const lulus = items.filter(x => x.status === 'PASS').length;
   const gagal = items.filter(x => x.status === 'FAIL').length;
   const belum = items.filter(x => x.status === 'BELUM').length;
+  // A document may describe ULO and UAT, but signatures must be verified separately.
+  const kind=String(sesi.jenis||'');
+  const hasUat=/UAT|User Acceptance|Beta Test/i.test(kind);
+  const hasUlo=/ULO|Uji Layak Operasi/i.test(kind);
+  const formKind=hasUat&&hasUlo?'ULO/UAT':hasUat?'UAT':'ULO';
   const binding = {
+    penerbit: { dinas:'Dinas Komunikasi, Informatika dan Persandian Aceh', bidang:'Bidang Layanan E-Government' },
+    dokumen: {
+      jenis: formKind, totalPages: pages.length+1,
+      showSummaryFirst: pages.length>=4, showSummaryFinal: pages.length>=4,
+      signatureNotice: 'Ruang tanda tangan bukan bukti tanda tangan digital tersertifikasi atau persetujuan.'
+    },
     project: {
       instansi: sesi.instansi,
       bidang: sesi.bidang,
@@ -67,7 +78,7 @@ function buildHtml({ sesi, tpl, items, fail }) {
       kode_form_3: 'S-APP.2.OBJ.5',
       form_title: 'Form Uji Aplikasi'
     },
-    skpd: { nama: sesi.project_nama, kota: sesi.instansi },
+    skpd: { nama: sesi.instansi || sesi.project_nama, kota: sesi.kota_kab_prov || '' },
     aplikasi: { nama_singkat: sesi.nama_singkat, nama_panjang: sesi.nama_panjang, url: sesi.url },
     sesi: { hari: sesi.hari, tanggal: sesi.tanggal, pukul: sesi.pukul, tempat: sesi.tempat, jenis: sesi.jenis },
     penguji: {
@@ -76,7 +87,7 @@ function buildHtml({ sesi, tpl, items, fail }) {
     },
     saksi: {
       nama: sesi.saksi_nama, jabatan: sesi.saksi_jabatan,
-      email: sesi.saksi_email, telp: sesi.saksi_telp
+      email: sesi.saksi_email, telp: sesi.saksi_telp, nip: sesi.saksi_nip || ''
     },
     ringkasan: { total, lulus, gagal, belum, catatan: sesi.catatan || '', temuan: sesi.temuan || '' },
     pages

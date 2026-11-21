@@ -12,7 +12,8 @@ for (const project of ['sirikap','simpeg']) {
     const total = data.ringkasan.lulus + data.ringkasan.gagal + data.ringkasan.belum;
     assert.equal(total, 71);
     assert.equal(data.pages.length, 4);
-    assert.equal(data.pages.every(p => p.rows.filter(r => !r.isSection).length <= 18), true);
+    const actual=data.pages.map(p=>p.rows.filter(r=>!r.isSection).length);
+    assert.deepEqual(actual, project==='sirikap'?[20,22,18,11]:[18,18,18,17]);
   });
 }
 test('page-map menolak duplikasi', () => {

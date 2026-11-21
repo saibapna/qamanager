@@ -1,14 +1,5 @@
-<table class="header-table">
-  <tr>
-    <td class="header-left">{{project.instansi}}</td>
-    <td class="header-right">{{project.kode_form_1}}</td>
-  </tr>
-  <tr>
-    <td class="header-left">{{project.bidang}}</td>
-    <td class="header-right">{{project.kode_form_2}}</td>
-  </tr>
-  <tr>
-    <td class="header-left">{{project.form_title}}</td>
-    <td class="header-right">{{project.kode_form_3}}</td>
-  </tr>
+<table class="header-table" aria-label="Header formulir resmi">
+  <tr><td class="header-left">{{#if @root.penerbit.dinas}}{{@root.penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class="header-right">{{@root.project.kode_form_1}}</td></tr>
+  <tr><td class="header-left">{{#if @root.penerbit.bidang}}{{@root.penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class="header-right">{{@root.project.kode_form_2}}</td></tr>
+  <tr><td class="header-left header-title">{{#if @root.project.form_title}}{{@root.project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class="header-right">{{@root.project.kode_form_3}}</td></tr>
 </table>
