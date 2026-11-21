@@ -6,7 +6,7 @@ import { Client, types } from 'pg';
 types.setTypeParser(20, value => {const number=Number(value);return Number.isSafeInteger(number)?number:value;});
 import { installPdfRoutes } from './pdf-support.js';
 import { installWorkflowRoutes } from './workflow-routes.js';
-import { assertCanonicalItems, checkFinalization, runAtomic } from './workflow-core.js';
+import { assertCanonicalItems, checkFinalization, runAtomic, accountThrottleKey } from './workflow-core.js';
 import { pbkdf2Sync, timingSafeEqual } from 'node:crypto';
 
 const app=new Hono();
@@ -59,7 +59,7 @@ async function guard(c,key,allowed=allRoles){
 }
 
 app.onError((error,c)=>{
- if(error instanceof ApiError)return c.json({error:error.message},error.status);
+ if(error instanceof ApiError){if(error.status===429)c.header('Retry-After','900');return c.json({error:error.message},error.status);}
  if(error.code==='23505')return c.json({error:'Data duplikat'},409);
  if(error.code==='23503'||error.code==='23514')return c.json({error:'Validasi atau relasi database gagal'},400);
  console.error('qamanager_hono',error?.message||'error');return c.json({error:'Kesalahan server'},500);
@@ -117,13 +117,24 @@ app.use('/api/auth/*',async(c,next)=>{
   await next();
 });
 app.post('/api/auth/login',async c=>{
-  const d=await json(c);if(!isStr(d?.email)||typeof d.password!=='string')fail(400,'Email dan password wajib');
-  const attemptKey=await sha('auth-account:'+String(d.email).trim().toLowerCase()+':'+(c.req.header('cf-connecting-ip')||'unknown'));
-  const past=await first(c,'SELECT attempts,window_started_at FROM auth_attempts WHERE key_hash=$1',[attemptKey]);
-  if(past?.attempts>=6 && Date.now()-new Date(past.window_started_at).getTime()<900000)fail(429,'Akun sementara dibatasi setelah terlalu banyak percobaan');
+  const d=await json(c);
+  if(!isStr(d?.email)||d.email.length>254||!d.email.includes('@')||typeof d.password!=='string'||d.password.length>200){
+    fail(400,'Email dan password wajib');
+  }
+  // One counter per canonical account across ALL IPs; the IP middleware
+  // separately protects the service from broad credential stuffing.
+  // Atomically increment before password verification so concurrent requests
+  // cannot all pass a SELECT-then-UPDATE race.
+  const attemptKey=accountThrottleKey(d.email,c.env.JWT_ACCESS_SECRET);
+  const attempt=await first(c,
+    "INSERT INTO auth_attempts(key_hash,attempts,window_started_at,updated_at) VALUES($1,1,now(),now()) ON CONFLICT(key_hash) DO UPDATE SET attempts=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN 1 ELSE auth_attempts.attempts+1 END,window_started_at=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN now() ELSE auth_attempts.window_started_at END,updated_at=now() RETURNING attempts",[attemptKey]);
+  if(attempt.attempts>6){
+    console.warn('qamanager_auth_limit',JSON.stringify({scope:'account',attempts:attempt.attempts}));
+    fail(429,'Akun sementara dibatasi setelah terlalu banyak percobaan');
+  }
   const user=await first(c,'SELECT id,email,nama,password_hash,aktif,is_platform_admin FROM users WHERE lower(email)=lower($1)',[d.email.trim()]);
   if(!user?.aktif||!await passVerify(user.password_hash,d.password)){
-    await q(c,"INSERT INTO auth_attempts(key_hash,attempts,window_started_at,updated_at) VALUES($1,1,now(),now()) ON CONFLICT(key_hash) DO UPDATE SET attempts=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN 1 ELSE auth_attempts.attempts+1 END,window_started_at=CASE WHEN auth_attempts.window_started_at<now()-interval '15 minutes' THEN now() ELSE auth_attempts.window_started_at END,updated_at=now()",[attemptKey]);
+    console.warn('qamanager_auth_failed',JSON.stringify({scope:'account',attempts:attempt.attempts}));
     fail(401,'Kredensial salah');
   }
   const projects=await members(c,user.id);
