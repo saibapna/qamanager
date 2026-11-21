@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Editor from '@monaco-editor/react';
-import { Download, Save, Upload } from 'lucide-react';
+import { Download, Save, Share2, Upload } from 'lucide-react';
 import { templatesApi, Template } from '@/api/templates';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { Badge } from '@/components/Badge';
+import { useAuth } from '@/store/authStore';
 
 export function TemplateEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,26 @@ export function TemplateEditorPage() {
   const { data: tpl, isLoading } = useQuery({ queryKey: ['template', tid], queryFn: () => templatesApi.get(tid) });
   const [draft, setDraft] = useState<Partial<Template>>({});
   const [tab, setTab] = useState<'layout' | 'kategori' | 'page-map'>('layout');
+  const isAdmin = useAuth(s => s.hasRole(Number(tpl?.project_id||0), 'ADMIN'));
+  const { data: sharing, refetch: refetchSharing } = useQuery({
+    queryKey:['template-sharing',tid], queryFn:()=>templatesApi.sharing(tid),
+    enabled: !!tpl?.published && isAdmin
+  });
+  const shareMut = useMutation({
+    mutationFn: (enable:boolean) => enable ? templatesApi.share(tid) : templatesApi.unshare(tid),
+    onSuccess: (_result,enable) => {
+      void refetchSharing();
+      qc.invalidateQueries({queryKey:['shared-templates']});
+      toast.push('success', enable ? 'Template tersedia di Katalog Bersama' : 'Berbagi template dinonaktifkan');
+    },
+    onError: (e:Error) => toast.push('error',e.message)
+  });
+  const toggleShare = () => {
+    if (sharing?.shared) { shareMut.mutate(false); return; }
+    if (window.confirm('Bagikan layout dan konfigurasi template ini ke administrator proyek lain? Pastikan tidak ada data pribadi di template. Data sesi, fixture PDF, bukti, dan tanda tangan tidak dibagikan.')) {
+      shareMut.mutate(true);
+    }
+  };
   const { data: fixtures = [] } = useQuery({ queryKey: ['fixtures',tid], queryFn: () => templatesApi.fixtures(tid), enabled: !!tpl });
 
   useEffect(() => { if (tpl) setDraft(tpl); }, [tpl]);
@@ -56,6 +77,11 @@ export function TemplateEditorPage() {
         actions={
           <>
             <Badge variant={draft.published ? 'success' : 'warning'}>{draft.published ? 'Published' : 'Draft'}</Badge>
+            {!!draft.published && isAdmin && <button type="button"
+              onClick={toggleShare} disabled={shareMut.isPending || !sharing}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-700 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+              <Share2 size={16}/> {sharing?.shared ? 'Hentikan Berbagi' : 'Bagikan Template'}
+            </button>}
             <label className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg cursor-pointer hover:bg-gray-50">
               <Upload size={16} /> Fixture
               <input type="file" accept="application/pdf" className="hidden"
@@ -71,6 +97,14 @@ export function TemplateEditorPage() {
             )}
           </>
         } />
+      {draft.published && isAdmin && <div className="mb-4 rounded-xl border bg-white p-4 text-sm">
+        <p className="font-semibold">Berbagi pakai antarproyek</p>
+        <p className="mt-1 text-slate-600">
+          {sharing?.shared ? 'Template tersedia untuk disalin oleh administrator proyek lain.' :
+            'Template belum masuk Katalog Bersama. Hanya ADMIN proyek ini yang dapat membagikan.'}
+          {' '}Penerima memperoleh salinan DRAFT yang dapat disesuaikan; data uji, fixture, PDF, dan tanda tangan tidak ikut.
+        </p>
+      </div>}
       <div className="bg-white rounded-xl border p-4 mb-4">
         <p className="font-semibold text-sm mb-2">Fixture PDF baseline</p>
         {fixtures.length === 0 ? <p className="text-sm text-slate-500">Belum ada fixture. Unggah PDF baseline untuk verifikasi berkas.</p> :
