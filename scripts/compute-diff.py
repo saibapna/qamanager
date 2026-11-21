@@ -12,13 +12,12 @@ def heatmap(ref, out):
     b = np.array(out.convert('RGB')).astype(int)
     diff = np.abs(a - b).sum(axis=2)
     mask = diff > 16
-    h = np.zeros_like(a, dtype=np.uint8)
-    h[..., 0] = np.where(mask, 255, 255)
-    h[..., 1] = np.where(mask, 0, 255)
-    h[..., 2] = np.where(mask, 0, 255)
-    gray = np.array(ref.convert('L').convert('RGB'))
-    blended = (h * 0.6 + gray * 0.4).astype(np.uint8)
-    return Image.fromarray(blended)
+    # Preserve unchanged pixels in grayscale and color only changed pixels red.
+    # The previous blend whitened unchanged pixels and obscured subtle layout defects.
+    grayscale = np.array(ref.convert('L').convert('RGB'), dtype=np.uint8)
+    result = grayscale.copy()
+    result[mask] = [255, 0, 0]
+    return Image.fromarray(result)
 
 def main():
     cfg = json.loads(sys.argv[1])
