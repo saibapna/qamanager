@@ -25,7 +25,7 @@ for (const version of versions) {
   const hash=crypto.createHash('sha256').update(layout+JSON.stringify(partials)).digest('hex');
   for (const [code,obj] of Object.entries(maps)) {
     const pages=version.version==='1.1.0'?(obj.officialPages||obj.pages):obj.pages;
-    sql += `INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)\nSELECT id,${sqlLiteral(version.version)},${sqlLiteral(code+' Form ULO/ UAT '+version.version)},${sqlLiteral(layout)},${sqlLiteral(JSON.stringify(partials))}::jsonb,${sqlLiteral(JSON.stringify(obj.kategori))}::jsonb,${sqlLiteral(JSON.stringify(pages))}::jsonb,${sqlLiteral(hash)},TRUE\nFROM projects WHERE kode=${sqlLiteral(code)} ON CONFLICT (project_id,versi) DO NOTHING;\n`;
+    sql += `INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)\nSELECT id,${sqlLiteral(version.version)},${sqlLiteral(version.version==='1.0.0'?code+' Form ULO':code+' Form BA ULO/UAT 1.1.0')},${sqlLiteral(layout)},${sqlLiteral(JSON.stringify(partials))}::jsonb,${sqlLiteral(JSON.stringify(obj.kategori))}::jsonb,${sqlLiteral(JSON.stringify(pages))}::jsonb,${sqlLiteral(hash)},TRUE\nFROM projects WHERE kode=${sqlLiteral(code)} ON CONFLICT (project_id,versi) DO NOTHING;\n`;
   }
 }
 await fs.writeFile('db/seed-templates.sql', sql);
