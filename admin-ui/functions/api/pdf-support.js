@@ -3,10 +3,11 @@ import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
 import { runAtomic } from './workflow-core.js';
+import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
 
-const MAX_FIXTURE_BYTES = 5 * 1024 * 1024;
-const MAX_OUTPUT_BYTES = 6 * 1024 * 1024;
-const MAX_OUTPUTS_PER_SESSION = 20;
+const MAX_FIXTURE_BYTES = PRIVATE_STORAGE_LIMITS.fixtureFile;
+const MAX_OUTPUT_BYTES = PRIVATE_STORAGE_LIMITS.pdfOutput;
+const MAX_OUTPUTS_PER_SESSION = PRIVATE_STORAGE_LIMITS.pdfSessionCount;
 
 const hashPdf = bytes => createHash('sha256').update(bytes).digest('hex');
 const isPdf = bytes => bytes.length > 100 &&
@@ -102,7 +103,7 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
   });
 
   app.post('/api/templates/:templateId/fixtures', async c => {
-    await guard(c, 'templateId', ['ADMIN']);
+    const projectId = await guard(c, 'templateId', ['ADMIN']);
     const tid = id(c.req.param('templateId'));
     const ct = c.req.header('content-type') || '';
     if (!ct.toLowerCase().startsWith('multipart/form-data')) fail(415, 'Upload harus multipart/form-data');
@@ -117,6 +118,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     const path = 'fixtures/template-' + tid + '/' + crypto.randomUUID() + '.pdf';
     const name = String(file.name || 'baseline.pdf').replace(/[^\w .()-]/g, '_').slice(0, 120);
     const fixture = await runAtomic(sql => q(c, sql), async () => {
+      await q(c, 'SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+      const count = await first(c, 'SELECT count(*)::int AS total FROM template_fixtures WHERE template_id=$1', [tid]);
+      if(count.total >= PRIVATE_STORAGE_LIMITS.fixtureTemplateCount) fail(409,'Maksimal 10 fixture per template');
+      const usage = await first(c, 'SELECT coalesce(sum(f.size_bytes),0)::bigint AS total_bytes FROM template_fixtures f JOIN templates t ON t.id=f.template_id WHERE t.project_id=$1', [projectId]);
+      if(wouldExceedQuota(usage.total_bytes,bytes.length,PRIVATE_STORAGE_LIMITS.fixtureProjectBytes)){
+        fail(413,'Kapasitas fixture project mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.fixtureProjectBytes));
+      }
       const inserted = await first(c,
         'INSERT INTO template_fixtures(template_id,nama,pdf_path,sha256,pdf_data,size_bytes,page_count) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,template_id,nama,pdf_path,sha256,size_bytes,page_count,created_at',
         [tid, name, path, digest, Buffer.from(bytes), bytes.length, info.pageCount]);
@@ -141,6 +149,7 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
   app.post('/api/sesi/:sesiId/pdf', async c => {
     const projectId = await guard(c, 'sesiId', ['ADMIN', 'TESTER']);
     const sid = id(c.req.param('sesiId'));
+    const startedAt = Date.now();
     if (!c.env.BROWSER?.quickAction) fail(503, 'Binding Cloudflare Browser Run belum dikonfigurasi');
     const sesi = await first(c,
       'SELECT s.*, a.nama_singkat,a.nama_panjang,a.url,p.nama AS project_nama,p.instansi,p.bidang FROM ulo_sesi s JOIN aplikasi a ON a.id=s.aplikasi_id JOIN projects p ON p.id=s.project_id WHERE s.id=$1',
@@ -156,7 +165,9 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     if (count.count >= MAX_OUTPUTS_PER_SESSION) fail(409, 'Batas ' + MAX_OUTPUTS_PER_SESSION + ' dokumen PDF per sesi tercapai');
     const html = buildHtml({ sesi, tpl, items, fail });
     let render;
+    const renderStartedAt = Date.now();
     try { render = await c.env.BROWSER.quickAction('pdf', { html }); }
+    const renderMs = Date.now() - renderStartedAt;
     catch (error) {
       console.error('qamanager_pdf_renderer', error?.message || 'Browser Run error');
       fail(503, 'Browser Run tidak dapat menghasilkan PDF. Periksa kuota Browser Run');
@@ -173,6 +184,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     await q(c, 'BEGIN');
     let saved;
     try {
+      // Serialize all project PDF writes to enforce a physical-bytea ceiling.
+      await q(c, 'SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+      const usage = await first(c,
+        'SELECT coalesce(sum(o.size_bytes),0)::bigint AS total_bytes FROM ulo_output o JOIN ulo_sesi s ON s.id=o.sesi_id WHERE s.project_id=$1', [projectId]);
+      if(wouldExceedQuota(usage.total_bytes,data.length,PRIVATE_STORAGE_LIMITS.pdfProjectBytes)){
+        fail(413,'Kapasitas PDF project mencapai '+storageMiB(PRIVATE_STORAGE_LIMITS.pdfProjectBytes));
+      }
       await q(c, 'SELECT pg_advisory_xact_lock(177013,$1)', [sid]);
       const latest = await first(c, 'SELECT coalesce(max(versi),0)+1 AS next_version FROM ulo_output WHERE sesi_id=$1', [sid]);
       const version = Number(latest.next_version);
@@ -181,12 +199,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
       saved = await first(c,
         'INSERT INTO ulo_output(sesi_id,versi,pdf_path,sha256,size_bytes,page_count,pdf_data) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,versi,pdf_path,sha256,size_bytes,page_count',
         [sid, version, path, digest, data.length, info.pageCount, Buffer.from(data)]);
-      await audit(c, 'PDF_GENERATED', 'sesi', sid, { output_id: saved.id, versi: version });
+      await audit(c, 'PDF_GENERATED', 'sesi', sid, { output_id: saved.id, versi: version, render_ms: renderMs, page_count: info.pageCount, size_bytes: data.length });
       await q(c, 'COMMIT');
     } catch (error) {
       await q(c, 'ROLLBACK');
       throw error;
     }
+    console.info('qamanager_pdf_metrics',JSON.stringify({project_id:projectId,sesi_id:sid,render_ms:renderMs,total_ms:Date.now()-startedAt,page_count:info.pageCount,size_bytes:data.length}));
     return safePdfResponse(data, 'ulo-sesi-' + sid + '-v' + saved.versi + '.pdf');
   });
 
