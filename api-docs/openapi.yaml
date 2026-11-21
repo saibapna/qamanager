@@ -389,7 +389,7 @@ paths:
         required: true
         schema:
           type: integer
-      summary: Generate PDF 1=1
+      summary: Generate PDF dari snapshot sesi yang konsisten; 409 jika revision/status berubah selama render
       responses:
         '200':
           description: PDF binary
@@ -398,6 +398,12 @@ paths:
               schema:
                 type: string
                 format: binary
+        '409':
+          description: Sesi berubah selama render, atau batas versi PDF per sesi telah tercapai
+        '413':
+          description: Batas ukuran PDF atau kapasitas penyimpanan project tercapai
+        '503':
+          description: Cloudflare Browser Run tidak tersedia
   /templates/{templateId}/validate:
     post:
       parameters:

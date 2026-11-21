@@ -2,7 +2,7 @@ import { renderSafeHandlebars } from './safe-handlebars.js';
 import { PDFDocument } from 'pdf-lib';
 import { createHash } from 'node:crypto';
 import { paginateItems } from '../../../src/layout/page-map.js';
-import { runAtomic } from './workflow-core.js';
+import { runAtomic, isPdfSnapshotCurrent } from './workflow-core.js';
 import { PRIVATE_STORAGE_LIMITS, wouldExceedQuota, storageMiB } from './storage-policy.js';
 
 const MAX_FIXTURE_BYTES = PRIVATE_STORAGE_LIMITS.fixtureFile;
@@ -163,7 +163,12 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     if (!items.length) fail(422, 'Belum ada item UAT untuk sesi ini');
     const count = await first(c, 'SELECT count(*)::int AS count FROM ulo_output WHERE sesi_id=$1', [sid]);
     if (count.count >= MAX_OUTPUTS_PER_SESSION) fail(409, 'Batas ' + MAX_OUTPUTS_PER_SESSION + ' dokumen PDF per sesi tercapai');
+    // Source revision and HTML digest bind the archived PDF to a stable UAT snapshot.
+    const sourceRevision=Number(sesi.revision);
+    const sourceStatus=String(sesi.status);
+    if(!Number.isSafeInteger(sourceRevision)||sourceRevision<1)fail(409,'Sesi memerlukan revisi yang valid');
     const html = buildHtml({ sesi, tpl, items, fail });
+    const sourceHtmlSha256=hashPdf(new TextEncoder().encode(html));
     let render;
     const renderStartedAt = Date.now();
     try { render = await c.env.BROWSER.quickAction('pdf', { html }); }
@@ -186,6 +191,12 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
     try {
       // Serialize all project PDF writes to enforce a physical-bytea ceiling.
       await q(c, 'SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+      // A session can change while Browser Run renders HTML. Do not store a
+      // PDF if results, metadata, or finalization state moved meanwhile.
+      const current=await first(c,'SELECT revision,status FROM ulo_sesi WHERE id=$1 FOR UPDATE',[sid]);
+      if(!isPdfSnapshotCurrent(sourceRevision,sourceStatus,current)){
+        fail(409,'Sesi berubah saat PDF sedang dibuat. Muat ulang dan generate kembali');
+      }
       const usage = await first(c,
         'SELECT coalesce(sum(o.size_bytes),0)::bigint AS total_bytes FROM ulo_output o JOIN ulo_sesi s ON s.id=o.sesi_id WHERE s.project_id=$1', [projectId]);
       if(wouldExceedQuota(usage.total_bytes,data.length,PRIVATE_STORAGE_LIMITS.pdfProjectBytes)){
@@ -199,13 +210,13 @@ export function installPdfRoutes(app, { q, first, guard, id, fail, audit }) {
       saved = await first(c,
         'INSERT INTO ulo_output(sesi_id,versi,pdf_path,sha256,size_bytes,page_count,pdf_data) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,versi,pdf_path,sha256,size_bytes,page_count',
         [sid, version, path, digest, data.length, info.pageCount, Buffer.from(data)]);
-      await audit(c, 'PDF_GENERATED', 'sesi', sid, { output_id: saved.id, versi: version, render_ms: renderMs, page_count: info.pageCount, size_bytes: data.length });
+      await audit(c, 'PDF_GENERATED', 'sesi', sid, { output_id: saved.id, versi: version, source_revision: sourceRevision, source_status: sourceStatus, source_html_sha256: sourceHtmlSha256, render_ms: renderMs, page_count: info.pageCount, size_bytes: data.length });
       await q(c, 'COMMIT');
     } catch (error) {
       await q(c, 'ROLLBACK');
       throw error;
     }
-    console.info('qamanager_pdf_metrics',JSON.stringify({project_id:projectId,sesi_id:sid,render_ms:renderMs,total_ms:Date.now()-startedAt,page_count:info.pageCount,size_bytes:data.length}));
+    console.info('qamanager_pdf_metrics',JSON.stringify({project_id:projectId,sesi_id:sid,source_revision:sourceRevision,render_ms:renderMs,total_ms:Date.now()-startedAt,page_count:info.pageCount,size_bytes:data.length}));
     return safePdfResponse(data, 'ulo-sesi-' + sid + '-v' + saved.versi + '.pdf');
   });
 
