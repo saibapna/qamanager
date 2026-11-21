@@ -347,11 +347,13 @@ SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
       </td>
     </tr>
   </table>
+  {{#if dokumen.showSummaryFirst}}
   <div class="summary-block">
     <strong>Ringkasan Hasil {{dokumen.jenis}} :</strong>
     <div>{{ringkasan.total}} item diuji - {{ringkasan.lulus}} lulus, {{ringkasan.gagal}} gagal, {{ringkasan.belum}} belum diuji. {{ringkasan.catatan}}</div>
-    {{#if dokumen.signatureNotice}}<div class="signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   </div>
+  {{/if}}
+  {{#if dokumen.signatureNotice}}<div class="summary-block signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   <div class="page-footer"><div class="rule">Hal. 1 dari {{dokumen.totalPages}} halaman</div></div>
 </div>
 
@@ -375,7 +377,9 @@ SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
     </tbody>
   </table>
   {{#if this.isLastPage}}
+    {{#if @root.dokumen.showSummaryFinal}}
     <div class="summary-block"><strong>Ringkasan Hasil {{@root.dokumen.jenis}} :</strong><div>{{@root.ringkasan.total}} item - {{@root.ringkasan.lulus}} lulus, {{@root.ringkasan.gagal}} gagal, {{@root.ringkasan.belum}} belum diuji. {{@root.ringkasan.catatan}} {{@root.ringkasan.temuan}}</div></div>
+    {{/if}}
     <table class="signature-table signature-final" aria-label="Ruang pengesahan hasil">
       <tr>
         <td>Disaksikan oleh :<div class="signature-space"></div><div class="signature-name">{{@root.saksi.nama}}</div><div class="signature-meta">{{#if @root.saksi.nip}}NIP. {{@root.saksi.nip}}{{/if}}</div></td>
@@ -389,7 +393,7 @@ SELECT id,'1.1.0','SIRIKAP Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
 
 </body>
 </html>
-','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AKSES & DASHBOARD","B":"PARAMETER - DAFTAR OPD","C":"PARAMETER - KECAMATAN","D":"PARAMETER - GAMPONG","E":"PARAMETER - URUSAN","F":"INOVASI DAERAH - DAFTAR & INDIKATOR","G":"INOVASI DAERAH - TAMBAH","H":"KELITBANGAN & LAPORAN","I":"UTILITY - PENGGUNA & GROUP","J":"UTILITY - OTORITAS & PENGATURAN","K":"NAVIGASI & LAINNYA","L":"GATE ULO YANG BELUM TERBUKTI"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":20},"3":{"fromOrder":21,"toOrder":42},"4":{"fromOrder":43,"toOrder":60},"5":{"fromOrder":61,"toOrder":71}}'::jsonb,'52aeac5b34f83d0a4a2e3ae2285e279ac22e6ff917f550d92f91121f9cb6976f',TRUE
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AKSES & DASHBOARD","B":"PARAMETER - DAFTAR OPD","C":"PARAMETER - KECAMATAN","D":"PARAMETER - GAMPONG","E":"PARAMETER - URUSAN","F":"INOVASI DAERAH - DAFTAR & INDIKATOR","G":"INOVASI DAERAH - TAMBAH","H":"KELITBANGAN & LAPORAN","I":"UTILITY - PENGGUNA & GROUP","J":"UTILITY - OTORITAS & PENGATURAN","K":"NAVIGASI & LAINNYA","L":"GATE ULO YANG BELUM TERBUKTI"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":20},"3":{"fromOrder":21,"toOrder":42},"4":{"fromOrder":43,"toOrder":60},"5":{"fromOrder":61,"toOrder":71}}'::jsonb,'15f0196d1734a3290eed11d1ce5710c40faf320888a55bcfda478ae88f98210e',TRUE
 FROM projects WHERE kode='SIRIKAP' ON CONFLICT (project_id,versi) DO NOTHING;
 INSERT INTO templates (project_id,versi,nama,layout_hbs,partials,kategori_map,page_map,checksum,published)
 SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
@@ -488,11 +492,13 @@ SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
       </td>
     </tr>
   </table>
+  {{#if dokumen.showSummaryFirst}}
   <div class="summary-block">
     <strong>Ringkasan Hasil {{dokumen.jenis}} :</strong>
     <div>{{ringkasan.total}} item diuji - {{ringkasan.lulus}} lulus, {{ringkasan.gagal}} gagal, {{ringkasan.belum}} belum diuji. {{ringkasan.catatan}}</div>
-    {{#if dokumen.signatureNotice}}<div class="signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   </div>
+  {{/if}}
+  {{#if dokumen.signatureNotice}}<div class="summary-block signature-warning">{{dokumen.signatureNotice}}</div>{{/if}}
   <div class="page-footer"><div class="rule">Hal. 1 dari {{dokumen.totalPages}} halaman</div></div>
 </div>
 
@@ -516,7 +522,9 @@ SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
     </tbody>
   </table>
   {{#if this.isLastPage}}
+    {{#if @root.dokumen.showSummaryFinal}}
     <div class="summary-block"><strong>Ringkasan Hasil {{@root.dokumen.jenis}} :</strong><div>{{@root.ringkasan.total}} item - {{@root.ringkasan.lulus}} lulus, {{@root.ringkasan.gagal}} gagal, {{@root.ringkasan.belum}} belum diuji. {{@root.ringkasan.catatan}} {{@root.ringkasan.temuan}}</div></div>
+    {{/if}}
     <table class="signature-table signature-final" aria-label="Ruang pengesahan hasil">
       <tr>
         <td>Disaksikan oleh :<div class="signature-space"></div><div class="signature-name">{{@root.saksi.nama}}</div><div class="signature-meta">{{#if @root.saksi.nip}}NIP. {{@root.saksi.nip}}{{/if}}</div></td>
@@ -530,5 +538,5 @@ SELECT id,'1.1.0','SIMPEG Form BA ULO/UAT 1.1.0','<!DOCTYPE html>
 
 </body>
 </html>
-','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'52aeac5b34f83d0a4a2e3ae2285e279ac22e6ff917f550d92f91121f9cb6976f',TRUE
+','{"header":"<table class=\"header-table\" aria-label=\"Header formulir resmi\">\n  <tr><td class=\"header-left\">{{#if penerbit.dinas}}{{penerbit.dinas}}{{else}}Dinas Komunikasi, Informatika dan Persandian Aceh{{/if}}</td><td class=\"header-right\">{{project.kode_form_1}}</td></tr>\n  <tr><td class=\"header-left\">{{#if penerbit.bidang}}{{penerbit.bidang}}{{else}}Bidang Layanan E-Government{{/if}}</td><td class=\"header-right\">{{project.kode_form_2}}</td></tr>\n  <tr><td class=\"header-left header-title\">{{#if project.form_title}}{{project.form_title}}{{else}}Form Uji Aplikasi{{/if}}</td><td class=\"header-right\">{{project.kode_form_3}}</td></tr>\n</table>\n"}'::jsonb,'{"A":"AUTENTIKASI & OTORISASI","B":"DATA PEGAWAI","C":"MUTASI & PROMOSI","D":"ABSENSI","E":"LAPORAN KEPEGAWAIAN","F":"UTILITY"}'::jsonb,'{"2":{"fromOrder":1,"toOrder":18},"3":{"fromOrder":19,"toOrder":36},"4":{"fromOrder":37,"toOrder":54},"5":{"fromOrder":55,"toOrder":71}}'::jsonb,'15f0196d1734a3290eed11d1ce5710c40faf320888a55bcfda478ae88f98210e',TRUE
 FROM projects WHERE kode='SIMPEG' ON CONFLICT (project_id,versi) DO NOTHING;
