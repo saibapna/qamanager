@@ -41,19 +41,52 @@ export function checkFinalization(items, catalog, options = {}) {
     }
   }
   const defects=options.defects || [];
-  for (const item of items.filter(i=>i.status==='FAIL')) {
-    const defect = defects.find(d => String(d.item_no)===String(item.no));
-    if (!defect || !['VERIFIED','WAIVED'].includes(defect.status)) {
-      return {ok:false,reason:'FAIL '+item.no+' harus memiliki defect terverifikasi atau waiver disetujui'};
+  const byNo=new Map(items.map(x=>[String(x.no),x]));
+  const defectsByNo=new Map();
+  // Validate the entire defect ledger; filtering by current item status alone
+  // would allow FAIL -> BELUM -> PASS to conceal an unresolved historical defect.
+  for(const defect of defects){
+    const key=String(defect.item_no);
+    const item=byNo.get(key);
+    if(!item)return {ok:false,reason:'Defect '+key+' tidak terhubung ke test case sesi'};
+    if(defectsByNo.has(key))return {ok:false,reason:'Defect duplikat untuk test case '+key};
+    defectsByNo.set(key,defect);
+    if(!['VERIFIED','WAIVED'].includes(defect.status)){
+      return {ok:false,reason:'Defect '+key+' belum selesai ('+String(defect.status||'UNKNOWN')+')'};
     }
-    if (defect.status==='WAIVED' && !String(defect.resolution_note||'').trim()) {
-      return {ok:false,reason:'Waiver defect '+item.no+' membutuhkan alasan tertulis'};
+    if(defect.status==='WAIVED'){
+      if(!String(defect.resolution_note||'').trim())return {ok:false,reason:'Waiver defect '+key+' membutuhkan alasan tertulis'};
+      if(item.status!=='FAIL')return {ok:false,reason:'Waiver '+key+' harus tetap tercatat sebagai FAIL'};
     }
-    if (defect.status==='VERIFIED' && defect.last_retest !== 'PASS') {
-      return {ok:false,reason:'Defect '+item.no+' membutuhkan retest PASS'};
+    if(defect.status==='VERIFIED'){
+      if(defect.last_retest!=='PASS')return {ok:false,reason:'Defect '+key+' membutuhkan retest PASS'};
+      if(item.status!=='PASS')return {ok:false,reason:'Retest terverifikasi '+key+' harus menghasilkan status PASS'};
+    }
+  }
+  for(const item of items.filter(x=>x.status==='FAIL')){
+    if(defectsByNo.get(String(item.no))?.status!=='WAIVED'){
+      return {ok:false,reason:'FAIL '+item.no+' wajib memiliki waiver yang disetujui atau retest PASS yang mengubah status item menjadi PASS'};
     }
   }
   return {ok:true};
+}
+
+/**
+ * Bulk UAT editing must not rewrite a failure/retest history. The dedicated
+ * defect/retest workflow is the only route allowed to clear a failed item.
+ * A new FAIL after a verified PASS is permitted and reopens its defect.
+ */
+export function assertBulkItemTransition(previous, proposed, defect) {
+  if (!previous || !proposed) throw new Error('Test case tidak valid');
+  const changed = previous.status!==proposed.status ||
+    String(previous.hasil||'')!==String(proposed.hasil||'');
+  if (!changed) return;
+  if (previous.status==='FAIL') {
+    throw new Error('Hasil FAIL hanya dapat diubah melalui proses retest defect');
+  }
+  if (defect && proposed.status!=='FAIL') {
+    throw new Error('Test case memiliki histori defect; hasil retest hanya dapat diubah melalui workflow defect');
+  }
 }
 
 export function hashCloudflarePassword(password) {
