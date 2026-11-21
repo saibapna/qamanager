@@ -31,10 +31,13 @@ export function paginateItems(items, pageMap, kategoriMap = {}) {
       if (unique.has(it.no)) throw new Error(`Item ${it.no} muncul lebih dari sekali dalam page_map`);
       unique.add(it.no);
       if (it.kategori !== lastCat) {
-        rows.push({ isSection: true, text: kategoriMap[it.kategori] || it.kategori });
+        rows.push({ isSection: true, code: String(it.kategori), text: kategoriMap[it.kategori] || it.kategori });
         lastCat = it.kategori;
       }
-      rows.push({ no: it.no, kebutuhan: it.kebutuhan, hasil: it.hasil || '', status: it.status });
+      rows.push({
+        no: it.no, kebutuhan: it.kebutuhan, hasil: it.hasil || '',
+        status: it.status, isPass: it.status === 'PASS', isFail: it.status === 'FAIL'
+      });
     }
     return { pageNumber: pn, isLastPage: i === pageNumbers.length - 1, rows };
   });
